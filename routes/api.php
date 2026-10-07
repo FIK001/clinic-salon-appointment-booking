@@ -15,7 +15,8 @@ Route::get('/providers/{provider}/slots', [TimeSlotController::class, 'getAvaila
 // Protected Client & Provider workflows
 Route::middleware('auth:sanctum')->group(function () {
     
-    // Core appointment endpoints (4 total routes)
+    // Core appointment endpoints (5 total routes now)
+    Route::get('/appointments', [AppointmentController::class, 'index']); // Injected Data Retrieval Hook
     Route::post('/appointments', [AppointmentController::class, 'store']);
     Route::post('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel']);
     Route::post('/appointments/{appointment}/reschedule', [AppointmentController::class, 'reschedule']);

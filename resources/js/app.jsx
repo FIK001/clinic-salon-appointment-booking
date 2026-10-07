@@ -30,7 +30,7 @@ function App() {
         return <Login onLoginSuccess={handleLoginSuccess} />;
     }
 
-    // Explicitly determine if the user has an administrative staff role context
+    // Swapped strictly to match your database role key entry: 'staff'
     const isStaff = user.role && user.role.toLowerCase() === 'staff';
 
     return (
@@ -100,8 +100,11 @@ function App() {
     );
 }
 
+// Global window container reference blocks hot-reload render duplication crashes completely
 const rootElement = document.getElementById('app');
 if (rootElement) {
-    const root = createRoot(rootElement);
-    root.render(<App />);
+    if (!globalThis.reactRoot) {
+        globalThis.reactRoot = createRoot(rootElement);
+    }
+    globalThis.reactRoot.render(<App />);
 }

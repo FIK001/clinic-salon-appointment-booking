@@ -10,6 +10,26 @@ use Illuminate\Support\Facades\Auth;
 class AppointmentController extends Controller
 {
     /**
+     * Display a listing of appointments based on the logged-in user's role profile context.
+     */
+    public function index()
+    {
+        $user = Auth::user();
+
+        // Allows both 'staff' and 'provider' roles to see the full administrative overview
+        if ($user->role === 'staff' || $user->role === 'provider') {
+            return response()->json(
+                Appointment::with(['client', 'service', 'time_slot'])->orderBy('id', 'desc')->get()
+            );
+        }
+
+        // If the logged-in user is a client, show ONLY their custom booking profile records
+        return response()->json(
+            Appointment::where('client_id', $user->id)->with(['service', 'time_slot'])->orderBy('id', 'desc')->get()
+        );
+    }
+
+    /**
      * Book a brand new slot.
      */
     public function store(Request $request)
