@@ -16,9 +16,16 @@ class Appointment extends Model
         return $this->belongsTo(User::class, 'client_id');
     }
 
+    // Original camelCase version
     public function timeSlot(): BelongsTo
     {
-        return $this->belongsTo(TimeSlot::class);
+        return $this->belongsTo(TimeSlot::class, 'time_slot_id');
+    }
+
+    // Snake_case alias to fix the relationship error safely
+    public function time_slot(): BelongsTo
+    {
+        return $this->belongsTo(TimeSlot::class, 'time_slot_id');
     }
 
     public function service(): BelongsTo
