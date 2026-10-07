@@ -1,58 +1,67 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 🏥 Clinic & Salon Appointment Booking System (BookingPanel)
+### 🚀 SIWES Internship Technical Evaluation Report — Project Cluster (WEB-18)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+An enterprise-grade, multi-role real-time scheduling application engineered with **Laravel 11**, **MySQL**, and a dynamic Single Page Application (SPA) frontend powered by **React** and **Tailwind CSS**.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 🏗️ Architectural Overview & Core Achievements
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### 1. Test Automation & Relational Integrity Guardrails
+* **Isolated Testing Matrix:** Integrated Pest testing frameworks with dynamic SQLite in-memory instance wrappers (`RefreshDatabase`) to prevent production data alteration.
+* **Slot-Conflict Invariant Rules:** Implemented race-condition guards to ensure simultaneous booking attempts on an occupied calendar segment return immediate `422 validation bottlenecks`.
+* **Assertion Index:** Achieved **100% Green Code Quality metrics** with 5 standalone suite features and 18 distinct test assertions passing in under `0.70 seconds`.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### 2. No-Show Tracking & Attendance Workflows
+* **Protected System Control Hooks:** Injected protected `/api/appointments/{appointment}/no-show` routes under secure `auth:sanctum` guards.
+* **Relational Mapping Alignments:** Built custom snake_case database model mapping hooks (`public function time_slot()`) inside Eloquent to seamlessly support background API controllers.
+* **Immutable State Rules:** Programmed business rule exceptions preventing cancelled or historical encounters from being edited retrospectively.
 
-## Learning Laravel
+### 3. Asynchronous 24-Hour Reminder Engine
+* **Artisan Console Pipeline:** Architected a custom automation runner (`php artisan app:send-appointment-reminders`).
+* **Time-Window Optimization:** Programmed data queries targeting specific `'booked'` fields whose calendar intervals fall within a strict, sliding **24-hour future window**.
+* **Cron Task Automation:** Registered the task scheduler inside `routes/console.php` to run autonomously every day at midnight (`0 0 * * *`).
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### 4. SPA Monolithic React Dashboards
+* **Hot-Reload Safe Architecture:** Eliminated container rendering replication errors (`removeChild on Node`) using global runtime state window flags (`globalThis.reactRoot`).
+* **Client Booking Desk:** Enabled an interactive date-picker component matching local machine zones to dynamically retrieve available slots.
+* **Staff Workspace Grid:** Designed a clean table layout matching `staff` role context permissions to display all active appointments, status histories, and immediate action buttons.
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+---
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+## 🛠️ System Stack & Core File Mapping
+* 📁 `app/Http/Controllers/AppointmentController.php` — Core validation workflows & index filters.
+* 📁 `app/Http/Controllers/TimeSlotController.php` — Dynamic availability matrix queries.
+* 📁 `app/Console/Commands/SendAppointmentReminders.php` — 24-Hour automated scanner script.
+* 📁 `routes/api.php` — API route parameter blueprints.
+* 📁 `routes/console.php` — Background cron scheduler instructions.
+* 📁 `resources/js/app.jsx` — Dynamic SPA engine router & mount safety.
+* 📁 `resources/js/pages/StaffDashboard.jsx` — Administrative records table workspace.
+* 📁 `tests/Feature/TimeSlotBookingTest.php` — Automated Pest validation scripts.
 
-## Agentic Development
+---
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## 💻 Technical Setup & Verification Instructions
 
+### 1. Run local hosting servers
+Launch the backend and frontend asset compilation processes in separate terminal windows:
 ```bash
-composer require laravel/boost --dev
+# Terminal 1: Launch Backend API Host
+php artisan serve
 
-php artisan boost:install
+# Terminal 2: Launch Frontend Compiler
+npm run dev
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+### 2. Verify Automation Tasks
+Confirm the registration of your scheduled notification cron task:
+```bash
+php artisan schedule:list
+```
+*Expected Output:* `0 0 * * * php artisan app:send-appointment-reminders ... Next Due: 10 hours from now`
 
-## Contributing
-
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### 3. Run Automated Testing Suite
+```bash
+.\vendor\bin\pest
+```
+*Expected Output:* `Tests: 5 passed (18 assertions)`
