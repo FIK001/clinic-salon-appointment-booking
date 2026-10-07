@@ -3,13 +3,14 @@
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProviderController;
+use App\Http\Controllers\TimeSlotController;
 use Illuminate\Support\Facades\Route;
 
 // Public authentication routes
 Route::post('/login', [AuthController::class, 'login']);
 
-// Public provider and slot availability exploration
-Route::get('/providers/{provider}/slots', [ProviderController::class, 'availableSlots']);
+// Aligned correctly to route slot inquiries directly to our dynamic time slot tracking logic
+Route::get('/providers/{provider}/slots', [TimeSlotController::class, 'getAvailableSlots']);
 
 // Protected Client & Provider workflows
 Route::middleware('auth:sanctum')->group(function () {

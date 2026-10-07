@@ -30,8 +30,8 @@ function App() {
         return <Login onLoginSuccess={handleLoginSuccess} />;
     }
 
-    // Explicitly determine if the user has a provider role context
-    const isProvider = user.role && user.role.toLowerCase() === 'provider';
+    // Explicitly determine if the user has an administrative staff role context
+    const isStaff = user.role && user.role.toLowerCase() === 'staff';
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
@@ -45,7 +45,7 @@ function App() {
                         </div>
                         
                         {/* Dynamic Navigation Tabs based on Role context */}
-                        {!isProvider ? (
+                        {!isStaff ? (
                             <nav className="hidden md:flex space-x-1">
                                 <button
                                     onClick={() => setActiveTab('book')}
@@ -73,7 +73,7 @@ function App() {
                         <div className="text-right">
                             <span className="block text-sm font-semibold text-slate-700">{user.name}</span>
                             <span className="block text-xs text-blue-600 capitalize font-medium">
-                                {isProvider ? 'Provider Account' : 'Client Account'}
+                                {isStaff ? 'Staff Account' : 'Client Account'}
                             </span>
                         </div>
                         <button
@@ -88,7 +88,7 @@ function App() {
 
             {/* Container Body Rendering logic */}
             <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6">
-                {isProvider ? (
+                {isStaff ? (
                     <StaffDashboard />
                 ) : activeTab === 'book' ? (
                     <Dashboard />

@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 
 export default function Dashboard() {
-    // Default the date picker input to today's date formatted as YYYY-MM-DD
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    // Force format a robust local YYYY-MM-DD template date
+    const getLocalDateString = (date) => {
+        const offset = date.getTimezoneOffset();
+        const adjustedDate = new Date(date.getTime() - (offset * 60 * 1000));
+        return adjustedDate.toISOString().split('T')[0];
+    };
+
+    const [selectedDate, setSelectedDate] = useState(getLocalDateString(new Date()));
     const [slots, setSlots] = useState([]);
     const [loading, setLoading] = useState(true);
     const [bookingNote, setBookingNote] = useState('');
     const [message, setMessage] = useState({ type: '', text: '' });
 
-    // Re-fetch slots every single time the user clicks a different date!
     useEffect(() => {
         fetchSlots();
     }, [selectedDate]);
@@ -17,7 +22,11 @@ export default function Dashboard() {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(`http://localhost:8000/api/providers/1/slots?date=${selectedDate}`, {
+            
+            // Clean up the date string to remove trailing characters
+            const cleanDate = String(selectedDate).trim();
+            
+            const response = await fetch(`http://localhost:8000/api/providers/1/slots?date=${cleanDate}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Accept': 'application/json'
@@ -72,7 +81,6 @@ export default function Dashboard() {
                     <p className="text-sm text-slate-500 mt-1">Select an open calendar time slot window below to book your consultation segment.</p>
                 </div>
                 
-                {/* Dynamic HTML5 Date Picker Input */}
                 <div className="flex flex-col">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Select Date</label>
                     <input 
