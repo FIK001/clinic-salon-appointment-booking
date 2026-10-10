@@ -11,14 +11,18 @@ return new class extends Migration
      */
     public function up(): void
     {
-       Schema::create('appointments', function (Blueprint $table) {
-    $table->id();
-    $table->foreignId('client_id')->constrained('users')->cascadeOnDelete();
-    $table->foreignId('time_slot_id')->constrained()->restrictOnDelete();
-    $table->foreignId('service_id')->constrained()->restrictOnDelete();
-    $table->enum('status', ['booked', 'completed', 'cancelled', 'no_show'])->default('booked');
-    $table->text('notes')->nullable();
-    $table->timestamps();
+        Schema::create('appointments', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('client_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('time_slot_id')->constrained('time_slots')->onDelete('cascade');
+            $table->foreignId('service_id')->constrained('services')->onDelete('cascade');
+            $table->enum('status', ['booked', 'cancelled', 'no_show'])->default('booked');
+            $table->text('notes')->nullable();
+            
+            // Unified directly here to guarantee it exists before the seeder runs
+            $table->text('consultation_report')->nullable(); 
+            
+            $table->timestamps();
         });
     }
 

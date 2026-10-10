@@ -8,15 +8,16 @@ use Illuminate\Support\Facades\Route;
 
 // Public authentication routes
 Route::post('/login', [AuthController::class, 'login']);
-
-// Aligned correctly to route slot inquiries directly to our dynamic time slot tracking logic
-Route::get('/providers/{provider}/slots', [TimeSlotController::class, 'getAvailableSlots']);
+Route::post('/register', [AuthController::class, 'register']);
 
 // Protected Client & Provider workflows
 Route::middleware('auth:sanctum')->group(function () {
     
+    // Advanced Distance-Aware Marketplace Exploration Engine
+    Route::get('/marketplace/explore', [ProviderController::class, 'exploreMarketplace']);
+
     // Core appointment endpoints (5 total routes now)
-    Route::get('/appointments', [AppointmentController::class, 'index']); // Injected Data Retrieval Hook
+    Route::get('/appointments', [AppointmentController::class, 'index']);
     Route::post('/appointments', [AppointmentController::class, 'store']);
     Route::post('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel']);
     Route::post('/appointments/{appointment}/reschedule', [AppointmentController::class, 'reschedule']);

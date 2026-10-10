@@ -9,6 +9,36 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    /**
+     * Process incoming user and facility registration requests.
+     */
+    public function register(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:8',
+            'role' => 'required|in:client,staff',
+            'phone_number' => 'nullable|string|max:20',
+            'address' => 'nullable|string',
+            'age' => 'nullable|integer|min:1',
+            'business_type' => 'required|in:clinic,salon,none',
+            'status' => 'required|in:pending_review,approved,rejected',
+        ]);
+
+        // Hash the password securely before database entry
+        $validated['password'] = Hash::make($validated['password']);
+
+        $user = User::create($validated);
+
+        $token = $user->createToken('api-token')->plainTextToken;
+
+        return response()->json([
+            'user' => $user->only('id', 'name', 'email', 'role', 'business_type', 'status'),
+            'token' => $token,
+        ], 201);
+    }
+
     public function login(Request $request)
     {
         $credentials = $request->validate([
@@ -26,8 +56,9 @@ class AuthController extends Controller
 
         $token = $user->createToken('api-token')->plainTextToken;
 
+        // Enhanced login load response to supply fresh profile elements to the frontend
         return response()->json([
-            'user' => $user->only('id', 'name', 'email', 'role'),
+            'user' => $user->only('id', 'name', 'email', 'role', 'business_type', 'status'),
             'token' => $token,
         ]);
     }

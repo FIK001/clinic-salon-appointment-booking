@@ -16,7 +16,7 @@ class AppointmentController extends Controller
     {
         $user = Auth::user();
 
-        // Allows both 'staff' and 'provider' roles to see the full administrative overview
+        // Allows both 'staff' and 'provider' roles to see the full administrative overview matrix
         if ($user->role === 'staff' || $user->role === 'provider') {
             return response()->json(
                 Appointment::with(['client', 'service', 'time_slot'])->orderBy('id', 'desc')->get()

@@ -17,7 +17,23 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            
+            // Core Roles: client accounts vs administrative/business staff accounts
             $table->enum('role', ['client', 'staff'])->default('client');
+            
+            // Custom Client Attributes (Optional/Nullable for business accounts)
+            $table->integer('age')->nullable();
+            
+            // Custom Shared & Business Attributes
+            $table->string('phone_number')->nullable();
+            $table->text('address')->nullable();
+            
+            // Business Type Vector: Categorizes businesses or specific practitioners
+            $table->enum('business_type', ['clinic', 'salon', 'none'])->default('none');
+            
+            // Staged Operational Review Queue: Handles administrative approval flows
+            $table->enum('status', ['pending_review', 'approved', 'rejected'])->default('approved');
+
             $table->rememberToken();
             $table->timestamps();
         });

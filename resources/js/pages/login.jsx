@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function Login({ onLoginSuccess }) {
+export default function Login({ onLoginSuccess, onNavigateToRegister }) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -41,7 +41,7 @@ export default function Login({ onLoginSuccess }) {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-slate-50 px-4">
+        <div className="flex items-center justify-center min-h-screen bg-slate-50 px-4 font-sans">
             <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 border border-slate-100">
                 <div className="text-center mb-8">
                     <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Welcome Back</h2>
@@ -87,6 +87,16 @@ export default function Login({ onLoginSuccess }) {
                         {loading ? 'Signing in...' : 'Sign In'}
                     </button>
                 </form>
+
+                {/* Newly Added Navigation Switch Link */}
+                <div className="border-t border-slate-100 mt-6 pt-4 text-center">
+                    <button 
+                        onClick={onNavigateToRegister} 
+                        className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition"
+                    >
+                        Don't have an account yet? Register here
+                    </button>
+                </div>
             </div>
         </div>
     );

@@ -16,7 +16,13 @@ return new class extends Migration
             $table->string('name');
             $table->string('email')->unique();
             $table->string('phone');
+            
+            // Flexible specialities field to hold custom clusters (e.g. Neurologist, Barber, Dentist)
             $table->string('specialty');
+            
+            // Physical location column enabling Haversine distance-aware recommendation lookups
+            $table->text('address')->nullable();
+            
             $table->text('bio')->nullable();
             $table->time('start_time');
             $table->time('end_time');
