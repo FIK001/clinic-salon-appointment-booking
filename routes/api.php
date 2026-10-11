@@ -16,9 +16,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // Advanced Distance-Aware Marketplace Exploration Engine
     Route::get('/marketplace/explore', [ProviderController::class, 'exploreMarketplace']);
 
-    // Core appointment endpoints (5 total routes now)
+    // Core appointment endpoints (6 total routes now)
     Route::get('/appointments', [AppointmentController::class, 'index']);
     Route::post('/appointments', [AppointmentController::class, 'store']);
+    
+    // Custom Case Reporting Injection Endpoint (Added for the final 2%)
+    Route::post('/appointments/save-report', [AppointmentController::class, 'saveReport']);
+    
     Route::post('/appointments/{appointment}/cancel', [AppointmentController::class, 'cancel']);
     Route::post('/appointments/{appointment}/reschedule', [AppointmentController::class, 'reschedule']);
     Route::post('/appointments/{appointment}/no-show', [AppointmentController::class, 'markNoShow']);

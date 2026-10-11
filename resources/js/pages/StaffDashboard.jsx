@@ -63,7 +63,7 @@ export default function StaffDashboard() {
         try {
             const token = localStorage.getItem('token');
             // Re-uses your secure appointment endpoint route layout parameters to patch records
-            const response = await fetch(`/api/appointments`, {
+            const response = await fetch(`/api/appointments/save-report`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -76,11 +76,12 @@ export default function StaffDashboard() {
                 })
             });
 
+            if (!response.ok) throw new Error('Failed to update case file reports.');
+
             setMessage({ type: 'success', text: 'Consultation case record updated and saved permanently inside system index charts! 📝' });
             fetchAllAppointments();
         } catch (err) {
-            setMessage({ type: 'error', text: 'Report saved to database layers successfully!' });
-            fetchAllAppointments();
+            setMessage({ type: 'error', text: err.message });
         }
     };
 
@@ -122,12 +123,12 @@ export default function StaffDashboard() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 font-medium">
                                     <p>👤 <span className="font-bold text-slate-700">Client:</span> {appt.client?.name || `User #${appt.client_id}`}</p>
                                     <p>📅 <span className="font-bold text-slate-700">Schedule:</span> {appt.time_slot ? new Date(appt.time_slot.start_time).toLocaleString() : 'Pending'}</p>
-                                    <p className="sm:col-span-2">📝 <span className="font-bold text-slate-700">Customer Note:</span> {appt.notes || 'None provided.'}</p>
+                                    <p className="sm:col-span-2">QL <span className="font-bold text-slate-700">Customer Note:</span> {appt.notes || 'None provided.'}</p>
                                 </div>
 
                                 {/* Dynamic Consultation/Grooming Case Note Recording Input Form */}
                                 <div className="mt-4 pt-3 border-t border-slate-200/60">
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">📝 Practitioner Consultation Case Report</label>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1"> Practitioners Consultation Case Report</label>
                                     <textarea
                                         value={reportsData[appt.id] || ''}
                                         onChange={(e) => handleReportInputChange(appt.id, e.target.value)}

@@ -52,7 +52,8 @@ class DatabaseSeeder extends Seeder
         $statuses = ['booked', 'cancelled', 'no_show'];
 
         foreach ($period as $dt) {
-            if (in_array($dt->format('N'), [1, 2, 3, 4, 5])) {
+            // FIXED: Explicitly matches ISO numbers 1 to 5 representing Monday through Friday
+            if (in_array((int)$dt->format('N'), [1, 2, 3, 4, 5])) {
                 $dateStr = $dt->format('Y-m-d');
                 
                 foreach ($times as $time) {
@@ -64,11 +65,10 @@ class DatabaseSeeder extends Seeder
                             'status' => 'available',
                         ]);
 
-                        // AUTOMATICALLY CLAIM A PORTION OF THE TIME SLOTS AS SIMULATED APPOINTMENTS
-                        if (rand(1, 12) === 1) {
+                        // Automatically hooks and claims random appointment rows to feed the dashboard data tables
+                        if (rand(1, 10) === 1) {
                             $slot->update(['status' => 'booked']);
                             $randomClient = $clients[array_rand($clients)];
-                            
                             $srv = Service::where('provider_id', $prov->id)->first();
 
                             Appointment::create([
@@ -76,7 +76,7 @@ class DatabaseSeeder extends Seeder
                                 'time_slot_id' => $slot->id,
                                 'service_id' => $srv->id,
                                 'status' => $statuses[array_rand($statuses)],
-                                'notes' => 'Patient requested general wellness evaluation.',
+                                'notes' => 'Client requested a standard consultation block.',
                                 'consultation_report' => null
                             ]);
                         }
