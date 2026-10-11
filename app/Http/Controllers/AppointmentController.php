@@ -6,19 +6,25 @@ use App\Models\Appointment;
 use App\Models\TimeSlot;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class AppointmentController extends Controller
 {
+    /**
+     * Display a listing of appointments based on the logged-in user's role profile context.
+     */
     public function index()
     {
         $user = Auth::user();
 
+        // Server-Side Role Enforcement Gate
         if ($user->role === 'staff') {
             return response()->json(
                 Appointment::with(['client', 'service', 'time_slot'])->orderBy('id', 'desc')->get()
             );
         }
 
+        // Standard individual customer collection tracking
         return response()->json(
             Appointment::where('client_id', $user->id)->with(['service', 'time_slot'])->orderBy('id', 'desc')->get()
         );
@@ -50,6 +56,9 @@ class AppointmentController extends Controller
         ]);
     }
 
+    /**
+     * Book a brand new slot.
+     */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -60,8 +69,11 @@ class AppointmentController extends Controller
 
         $timeSlot = TimeSlot::findOrFail($validated['time_slot_id']);
 
+        // FIXED: Throws an official field-level validation exception block to satisfy Pest assertions
         if ($timeSlot->status !== 'available') {
-            return response()->json(['message' => 'That slot is no longer available.'], 422);
+            throw ValidationException::withMessages([
+                'time_slot_id' => ['That slot is no longer available.']
+            ]);
         }
 
         $timeSlot->update(['status' => 'booked']);
@@ -77,6 +89,9 @@ class AppointmentController extends Controller
         return response()->json($appointment->load(['time_slot', 'service']), 201);
     }
 
+    /**
+     * Cancel an active appointment and release the slot.
+     */
     public function cancel(Appointment $appointment)
     {
         if ($appointment->status === 'cancelled' || $appointment->time_slot->start_time < now()) {
@@ -89,6 +104,9 @@ class AppointmentController extends Controller
         return response()->json($appointment->load(['time_slot', 'service']));
     }
 
+    /**
+     * Reschedule an appointment to an open alternative slot.
+     */
     public function reschedule(Request $request, Appointment $appointment)
     {
         $validated = $request->validate(['time_slot_id' => 'required|exists:time_slots,id']);
@@ -105,6 +123,9 @@ class AppointmentController extends Controller
         return response()->json($appointment->load(['time_slot', 'service']));
     }
 
+    /**
+     * Mark an appointment status as no-show.
+     */
     public function markNoShow(Appointment $appointment)
     {
         if ($appointment->status === 'cancelled') {
