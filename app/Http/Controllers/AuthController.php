@@ -10,7 +10,7 @@ use Illuminate\Validation\ValidationException;
 class AuthController extends Controller
 {
     /**
-     * Process incoming user and facility registration requests.
+     * Secure registration endpoint. Overrides and drops client-side role/status variables.
      */
     public function register(Request $request)
     {
@@ -18,19 +18,24 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8',
-            'role' => 'required|in:client,staff',
             'phone_number' => 'nullable|string|max:20',
             'address' => 'nullable|string',
             'age' => 'nullable|integer|min:1',
             'business_type' => 'required|in:clinic,salon,none',
-            'status' => 'required|in:pending_review,approved,rejected',
         ]);
 
-        // Hash the password securely before database entry
         $validated['password'] = Hash::make($validated['password']);
+        
+        // SERVER SIDE ENFORCEMENT: Ignore client input overrides completely
+        if ($validated['business_type'] === 'none') {
+            $validated['role'] = 'client';
+            $validated['status'] = 'approved';
+        } else {
+            $validated['role'] = 'staff';
+            $validated['status'] = 'pending_review'; // Force business accounts into staging state
+        }
 
         $user = User::create($validated);
-
         $token = $user->createToken('api-token')->plainTextToken;
 
         return response()->json([
@@ -54,9 +59,15 @@ class AuthController extends Controller
             ]);
         }
 
+        // SECURITY CHECK: If a business profile is pending review, deny access to dashboards
+        if ($user->role === 'staff' && $user->status === 'pending_review') {
+            throw ValidationException::withMessages([
+                'email' => ['Your business application is currently under review and pending approval.'],
+            ]);
+        }
+
         $token = $user->createToken('api-token')->plainTextToken;
 
-        // Enhanced login load response to supply fresh profile elements to the frontend
         return response()->json([
             'user' => $user->only('id', 'name', 'email', 'role', 'business_type', 'status'),
             'token' => $token,
@@ -66,7 +77,6 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
-
         return response()->json(['message' => 'Logged out']);
     }
 }

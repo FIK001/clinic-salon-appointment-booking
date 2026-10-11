@@ -9,14 +9,11 @@ use Illuminate\Support\Facades\Auth;
 
 class AppointmentController extends Controller
 {
-    /**
-     * Display a listing of appointments based on the logged-in user's role profile context.
-     */
     public function index()
     {
         $user = Auth::user();
 
-        if ($user->role === 'staff' || $user->role === 'provider') {
+        if ($user->role === 'staff') {
             return response()->json(
                 Appointment::with(['client', 'service', 'time_slot'])->orderBy('id', 'desc')->get()
             );
@@ -28,10 +25,15 @@ class AppointmentController extends Controller
     }
 
     /**
-     * Save or update an administrative/clinical consultation report sentence payload.
+     * Secure case note update process. Re-enforces authorization checks inside server layer.
      */
     public function saveReport(Request $request)
     {
+        // SERVER SIDE ROLE PROTECTION GATE
+        if (Auth::user()->role !== 'staff') {
+            return response()->json(['message' => 'Unauthorized operation access blocked.'], 403);
+        }
+
         $validated = $request->validate([
             'appointment_id' => 'required|exists:appointments,id',
             'consultation_report' => 'required|string',
@@ -48,9 +50,6 @@ class AppointmentController extends Controller
         ]);
     }
 
-    /**
-     * Book a brand new slot.
-     */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -62,10 +61,7 @@ class AppointmentController extends Controller
         $timeSlot = TimeSlot::findOrFail($validated['time_slot_id']);
 
         if ($timeSlot->status !== 'available') {
-            return response()->json([
-                'message' => 'That slot is no longer available.',
-                'errors' => ['time_slot_id' => ['That slot is no longer available.']]
-            ], 422);
+            return response()->json(['message' => 'That slot is no longer available.'], 422);
         }
 
         $timeSlot->update(['status' => 'booked']);
@@ -81,16 +77,10 @@ class AppointmentController extends Controller
         return response()->json($appointment->load(['time_slot', 'service']), 201);
     }
 
-    /**
-     * Cancel an active appointment and release the slot.
-     */
     public function cancel(Appointment $appointment)
     {
         if ($appointment->status === 'cancelled' || $appointment->time_slot->start_time < now()) {
-            return response()->json([
-                'message' => 'This appointment can no longer be cancelled.',
-                'errors' => ['status' => ['This appointment can no longer be cancelled.']]
-            ], 422);
+            return response()->json(['message' => 'This appointment can no longer be cancelled.'], 422);
         }
 
         $appointment->update(['status' => 'cancelled']);
@@ -99,22 +89,13 @@ class AppointmentController extends Controller
         return response()->json($appointment->load(['time_slot', 'service']));
     }
 
-    /**
-     * Reschedule an appointment to an open alternative slot.
-     */
     public function reschedule(Request $request, Appointment $appointment)
     {
-        $validated = $request->validate([
-            'time_slot_id' => 'required|exists:time_slots,id',
-        ]);
-
+        $validated = $request->validate(['time_slot_id' => 'required|exists:time_slots,id']);
         $newSlot = TimeSlot::findOrFail($validated['time_slot_id']);
 
         if ($newSlot->status !== 'available') {
-            return response()->json([
-                'message' => 'That slot is no longer available.',
-                'errors' => ['time_slot_id' => ['That slot is no longer available.']]
-            ], 422);
+            return response()->json(['message' => 'That slot is no longer available.'], 422);
         }
 
         $appointment->time_slot->update(['status' => 'available']);
@@ -124,20 +105,13 @@ class AppointmentController extends Controller
         return response()->json($appointment->load(['time_slot', 'service']));
     }
 
-    /**
-     * Mark an appointment status as no-show.
-     */
     public function markNoShow(Appointment $appointment)
     {
         if ($appointment->status === 'cancelled') {
-            return response()->json([
-                'message' => 'Cannot mark a cancelled appointment as a no-show.',
-                'errors' => ['status' => ['Cannot mark a cancelled appointment as a no-show.']]
-            ], 422);
+            return response()->json(['message' => 'Cannot mark a cancelled appointment as a no-show.'], 422);
         }
 
         $appointment->update(['status' => 'no_show']);
-
         return response()->json($appointment->load(['time_slot', 'service']));
     }
 }
