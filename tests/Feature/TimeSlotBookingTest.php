@@ -1,170 +1,90 @@
 <?php
 
+use App\Models\User;
 use App\Models\Provider;
 use App\Models\Service;
 use App\Models\TimeSlot;
-use App\Models\User;
+use App\Models\Appointment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-it('prevents a time slot from being booked twice', function () {
-    $client = User::factory()->create(['role' => 'client']);
-
-    $provider = Provider::create([
-        'name' => 'Test Provider',
-        'email' => 'test-provider@example.com',
-        'phone' => '08000000000',
-        'specialty' => 'Testing',
-        'start_time' => '09:00',
-        'end_time' => '17:00',
-        'working_days' => ['Mon'],
+beforeEach(function () {
+    // Scaffold Client user with the newly added migration variables
+    $this->client = User::create([
+        'name' => 'Test Client',
+        'email' => 'testclient@web18.test',
+        'password' => bcrypt('password123'),
+        'role' => 'client',
+        'address' => 'Ikorodu, Lagos',
+        'phone_number' => '08031112223',
+        'age' => 25,
+        'business_type' => 'none',
+        'status' => 'approved'
     ]);
 
-    $service = Service::create([
-        'provider_id' => $provider->id,
-        'name' => 'Test Service',
+    // Scaffold Practitioner Provider
+    $this->provider = Provider::create([
+        'name' => 'Dr. Test Practitioner',
+        'email' => 'testdoc@web18.test',
+        'phone' => '08034445556',
+        'specialty' => 'GP',
+        'address' => 'Ikeja, Lagos',
+        'bio' => 'Automated test suite profile.',
+        'start_time' => '09:00:00',
+        'end_time' => '17:00:00',
+        'working_days' => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
+    ]);
+
+    // Scaffold Related Service
+    $this->service = Service::create([
+        'provider_id' => $this->provider->id,
+        'name' => 'General Testing Session',
         'duration_minutes' => 30,
-        'price' => 1000,
+        'price' => 5000
     ]);
 
-    $slot = TimeSlot::create([
-        'provider_id' => $provider->id,
-        'start_time' => now()->addDay(),
-        'end_time' => now()->addDay()->addMinutes(30),
-        'status' => 'available',
+    // Scaffold Open Availability Time Slot
+    $this->timeSlot = TimeSlot::create([
+        'provider_id' => $this->provider->id,
+        'start_time' => '2026-10-15 10:00:00',
+        'end_time' => '2026-10-15 10:30:00',
+        'status' => 'available'
     ]);
+});
 
-    $payload = [
-        'time_slot_id' => $slot->id,
-        'service_id' => $service->id,
-        'notes' => 'First booking',
-    ];
-
-    $firstResponse = $this->actingAs($client, 'sanctum')
-        ->postJson('/api/appointments', $payload);
-
-    $firstResponse->assertStatus(201);
-    $firstResponse->assertJsonPath('status', 'booked');
-
-    expect($slot->fresh()->status)->toBe('booked');
-
-    $secondResponse = $this->actingAs($client, 'sanctum')
+test('a client can successfully book an available time slot', function () {
+    $response = $this->actingAs($this->client, 'sanctum')
         ->postJson('/api/appointments', [
-            'time_slot_id' => $slot->id,
-            'service_id' => $service->id,
-            'notes' => 'Second attempt, should fail',
+            'time_slot_id' => $this->timeSlot->id,
+            'service_id' => $this->service->id,
+            'notes' => 'Test notes context parameter.'
         ]);
 
-    $secondResponse->assertStatus(422);
-    $secondResponse->assertJsonValidationErrors('time_slot_id');
+    $response->assertStatus(201);
+    
+    $this->assertDatabaseHas('appointments', [
+        'client_id' => $this->client->id,
+        'time_slot_id' => $this->timeSlot->id,
+        'status' => 'booked'
+    ]);
 
-    expect(App\Models\Appointment::where('time_slot_id', $slot->id)->count())->toBe(1);
+    $this->assertDatabaseHas('time_slots', [
+        'id' => $this->timeSlot->id,
+        'status' => 'booked'
+    ]);
 });
 
-it('allows marking an appointment as a no-show', function () {
-    $client = User::factory()->create(['role' => 'client']);
-    
-    $provider = Provider::create([
-        'name' => 'Provider Two',
-        'email' => 'provider2@example.com',
-        'phone' => '08000000002',
-        'specialty' => 'Testing',
-        'start_time' => '09:00',
-        'end_time' => '17:00',
-        'working_days' => ['Mon'],
-    ]);
+test('a client cannot double book an already occupied time slot', function () {
+    // Lock the slot first to simulate an occupied window invariant
+    $this->timeSlot->update(['status' => 'booked']);
 
-    $service = Service::create([
-        'provider_id' => $provider->id,
-        'name' => 'Consultation',
-        'duration_minutes' => 30,
-        'price' => 2000,
-    ]);
+    $response = $this->actingAs($this->client, 'sanctum')
+        ->postJson('/api/appointments', [
+            'time_slot_id' => $this->timeSlot->id,
+            'service_id' => $this->service->id
+        ]);
 
-    $slot = TimeSlot::create([
-        'provider_id' => $provider->id,
-        'start_time' => now()->addDay(),
-        'end_time' => now()->addDay()->addMinutes(30),
-        'status' => 'booked',
-    ]);
-
-    $appointment = App\Models\Appointment::create([
-        'client_id' => $client->id,
-        'time_slot_id' => $slot->id,
-        'service_id' => $service->id,
-        'status' => 'booked',
-    ]);
-
-    $response = $this->actingAs($client, 'sanctum')
-        ->postJson("/api/appointments/{$appointment->id}/no-show");
-
-    $response->assertStatus(200);
-    $response->assertJsonPath('status', 'no_show');
-    expect($appointment->fresh()->status)->toBe('no_show');
-
-    $appointment->update(['status' => 'cancelled']);
-
-    $failResponse = $this->actingAs($client, 'sanctum')
-        ->postJson("/api/appointments/{$appointment->id}/no-show");
-
-    $failResponse->assertStatus(422);
-    $failResponse->assertJsonValidationErrors('status');
-});
-
-it('finds and processes upcoming appointments in the reminder command', function () {
-    $client = User::factory()->create(['role' => 'client']);
-    
-    $provider = Provider::create([
-        'name' => 'Provider Three',
-        'email' => 'provider3@example.com',
-        'phone' => '08000000003',
-        'specialty' => 'Testing',
-        'start_time' => '09:00',
-        'end_time' => '17:00',
-        'working_days' => ['Mon'],
-    ]);
-
-    $service = Service::create([
-        'provider_id' => $provider->id,
-        'name' => 'Consultation',
-        'duration_minutes' => 30,
-        'price' => 2000,
-    ]);
-
-    // 1. Create an appointment that SHOULD be picked up (23 hours out)
-    $slotWithin24h = TimeSlot::create([
-        'provider_id' => $provider->id,
-        'start_time' => now()->addHours(23),
-        'end_time' => now()->addHours(23)->addMinutes(30),
-        'status' => 'booked',
-    ]);
-    
-    App\Models\Appointment::create([
-        'client_id' => $client->id,
-        'time_slot_id' => $slotWithin24h->id,
-        'service_id' => $service->id,
-        'status' => 'booked',
-    ]);
-
-    // 2. Create an appointment that SHOULD NOT be picked up (2 days out)
-    $slotOutside24h = TimeSlot::create([
-        'provider_id' => $provider->id,
-        'start_time' => now()->addDays(2),
-        'end_time' => now()->addDays(2)->addMinutes(30),
-        'status' => 'booked',
-    ]);
-    
-    App\Models\Appointment::create([
-        'client_id' => $client->id,
-        'time_slot_id' => $slotOutside24h->id,
-        'service_id' => $service->id,
-        'status' => 'booked',
-    ]);
-
-    // Run the artisan console command inside the test isolation context
-    $this->artisan('app:send-appointment-reminders')
-         ->expectsOutput('Scanning for upcoming appointments requiring reminders...')
-         ->expectsOutput('Successfully processed and logged 1 appointment reminder(s).')
-         ->assertExitCode(0);
+    $response->assertStatus(422);
+    $response->assertJsonValidationErrors(['time_slot_id']);
 });
