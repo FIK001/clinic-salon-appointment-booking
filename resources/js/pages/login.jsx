@@ -88,11 +88,19 @@ export default function Login({ onLoginSuccess, onNavigateToRegister }) {
                     </button>
                 </form>
 
-                {/* Newly Added Navigation Switch Link */}
+                {/* Overridden button configuration to isolate routing actions from form events */}
                 <div className="border-t border-slate-100 mt-6 pt-4 text-center">
                     <button 
-                        onClick={onNavigateToRegister} 
-                        className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition"
+                        type="button"
+                        onClick={(e) => { 
+                            e.preventDefault(); 
+                            if (typeof onNavigateToRegister === 'function') {
+                                onNavigateToRegister(); 
+                            } else {
+                                console.error("Router connection block: check app.jsx layout initialization.");
+                            }
+                        }} 
+                        className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition bg-transparent border-0 cursor-pointer"
                     >
                         Don't have an account yet? Register here
                     </button>

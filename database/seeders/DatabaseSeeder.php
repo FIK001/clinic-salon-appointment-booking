@@ -18,71 +18,131 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // Staff/Admin Roles
-        User::create(['name' => 'Dr. Smith', 'email' => 'provider@example.com', 'password' => Hash::make('provider1234'), 'role' => 'staff', 'address' => 'Ikeja, Lagos', 'status' => 'approved']);
+        User::updateOrCreate(
+    ['email' => 'provider@example.com'],
+    [
+        'name' => 'Dr. Smith',
+        'password' => Hash::make('provider1234'),
+        'role' => 'staff',
+        'address' => 'Ikeja, Lagos',
+        'status' => 'approved',
+    ]
+);
         
         // Clients
-        $client1 = User::create(['name' => 'Jordan Client', 'email' => 'jordan@example.com', 'password' => Hash::make('client1234'), 'role' => 'client', 'age' => 24, 'phone_number' => '08155566677', 'address' => 'Ikorodu, Lagos']);
-        $client2 = User::create(['name' => 'David Adeleke', 'email' => 'david@web18.test', 'password' => Hash::make('password123'), 'role' => 'client', 'age' => 32, 'phone_number' => '08122233344', 'address' => 'Ikeja, Lagos']);
+       $client1 = User::updateOrCreate(
+    ['email' => 'jordan@example.com'],
+    [
+        'name' => 'Jordan Client',
+        'password' => Hash::make('client1234'),
+        'role' => 'client',
+        'age' => 24,
+        'phone_number' => '08155566677',
+        'address' => 'Ikorodu, Lagos',
+        'status' => 'approved',
+    ]
+);
 
+$client2 = User::updateOrCreate(
+    ['email' => 'david@web18.test'],
+    [
+        'name' => 'David Adeleke',
+        'password' => Hash::make('password123'),
+        'role' => 'client',
+        'age' => 32,
+        'phone_number' => '08122233344',
+        'address' => 'Ikeja, Lagos',
+        'status' => 'approved',
+    ]
+);
         // CLINIC PROVIDERS SECTOR
-        $p1 = Provider::create(['name' => 'Dr. Tunde Faniyi (Ikorodu Medical Centre)', 'email' => 'tunde@web18care.test', 'phone' => '08030000001', 'specialty' => 'GP', 'address' => 'Ikorodu, Lagos', 'bio' => 'General practitioner.', 'start_time' => '09:00:00', 'end_time' => '17:00:00', 'working_days' => ['Mon','Tue','Wed','Thu','Fri']]);
-        $p2 = Provider::create(['name' => 'Dr. Amaka Obi (Ikeja Plaza)', 'email' => 'amaka@web18care.test', 'phone' => '08030000002', 'specialty' => 'GP', 'address' => 'Ikeja, Lagos', 'bio' => 'Family diagnostics.', 'start_time' => '09:00:00', 'end_time' => '17:00:00', 'working_days' => ['Mon','Tue','Wed','Thu','Fri']]);
-        $p3 = Provider::create(['name' => 'Dr. Chioma Nwachukwu (Lekki Centre)', 'email' => 'chioma@web18care.test', 'phone' => '08030000003', 'specialty' => 'GP', 'address' => 'Lekki, Lagos', 'bio' => 'Premium consultant.', 'start_time' => '09:00:00', 'end_time' => '17:00:00', 'working_days' => ['Mon','Tue','Wed','Thu','Fri']]);
+$p1 = Provider::updateOrCreate(
+    ['email' => 'tunde@web18care.test'],
+    ['name' => 'Dr. Tunde Faniyi (Ikorodu Medical Centre)', 'phone' => '08030000001', 'specialty' => 'GP', 'address' => 'Ikorodu, Lagos', 'bio' => 'General practitioner.', 'start_time' => '09:00:00', 'end_time' => '17:00:00', 'working_days' => ['Mon','Tue','Wed','Thu','Fri']]
+);
 
-        // SALON PROVIDERS SECTOR
-        $p4 = Provider::create(['name' => 'Segun Barber (Opebi Fades)', 'email' => 'segun@web18salon.test', 'phone' => '08030000004', 'specialty' => 'Barber', 'address' => 'Opebi, Lagos', 'bio' => 'Master barber cutting expert.', 'start_time' => '09:00:00', 'end_time' => '17:00:00', 'working_days' => ['Mon','Tue','Wed','Thu','Fri']]);
-        $p5 = Provider::create(['name' => 'Clara Nails (VI Luxury Salon)', 'email' => 'clara@web18salon.test', 'phone' => '08030000005', 'specialty' => 'Nail Technician', 'address' => 'Victoria Island, Lagos', 'bio' => 'Nail therapy specialist.', 'start_time' => '09:00:00', 'end_time' => '17:00:00', 'working_days' => ['Mon','Tue','Wed','Thu','Fri']]);
+$p2 = Provider::updateOrCreate(
+    ['email' => 'amaka@web18care.test'],
+    ['name' => 'Dr. Amaka Obi (Ikeja Plaza)', 'phone' => '08030000002', 'specialty' => 'GP', 'address' => 'Ikeja, Lagos', 'bio' => 'Family diagnostics.', 'start_time' => '09:00:00', 'end_time' => '17:00:00', 'working_days' => ['Mon','Tue','Wed','Thu','Fri']]
+);
 
+$p3 = Provider::updateOrCreate(
+    ['email' => 'chioma@web18care.test'],
+    ['name' => 'Dr. Chioma Nwachukwu (Lekki Centre)', 'phone' => '08030000003', 'specialty' => 'GP', 'address' => 'Lekki, Lagos', 'bio' => 'Premium consultant.', 'start_time' => '09:00:00', 'end_time' => '17:00:00', 'working_days' => ['Mon','Tue','Wed','Thu','Fri']]
+);
+
+// SALON PROVIDERS SECTOR
+$p4 = Provider::updateOrCreate(
+    ['email' => 'segun@web18salon.test'],
+    ['name' => 'Segun Barber (Opebi Fades)', 'phone' => '08030000004', 'specialty' => 'Barber', 'address' => 'Opebi, Lagos', 'bio' => 'Master barber cutting expert.', 'start_time' => '09:00:00', 'end_time' => '17:00:00', 'working_days' => ['Mon','Tue','Wed','Thu','Fri']]
+);
+
+$p5 = Provider::updateOrCreate(
+    ['email' => 'clara@web18salon.test'],
+    ['name' => 'Clara Nails (VI Luxury Salon)', 'phone' => '08030000005', 'specialty' => 'Nail Technician', 'address' => 'Victoria Island, Lagos', 'bio' => 'Nail therapy specialist.', 'start_time' => '09:00:00', 'end_time' => '17:00:00', 'working_days' => ['Mon','Tue','Wed','Thu','Fri']]
+);
+        
         // Services mapping
-        $s1 = Service::create(['provider_id' => $p1->id, 'name' => 'Consultation', 'duration_minutes' => 30, 'price' => 5000]);
-        $s2 = Service::create(['provider_id' => $p2->id, 'name' => 'Consultation', 'duration_minutes' => 30, 'price' => 5000]);
-        $s3 = Service::create(['provider_id' => $p3->id, 'name' => 'Consultation', 'duration_minutes' => 30, 'price' => 5000]);
-        $s4 = Service::create(['provider_id' => $p4->id, 'name' => 'Haircut', 'duration_minutes' => 30, 'price' => 3000]);
-        $s5 = Service::create(['provider_id' => $p5->id, 'name' => 'Manicure', 'duration_minutes' => 30, 'price' => 6000]);
+        $s1 = Service::updateOrCreate(
+    ['provider_id' => $p1->id, 'name' => 'Consultation'],
+    ['duration_minutes' => 30, 'price' => 5000]
+);
+
+$s2 = Service::updateOrCreate(
+    ['provider_id' => $p2->id, 'name' => 'Consultation'],
+    ['duration_minutes' => 30, 'price' => 5000]
+);
+
+$s3 = Service::updateOrCreate(
+    ['provider_id' => $p3->id, 'name' => 'Consultation'],
+    ['duration_minutes' => 30, 'price' => 5000]
+);
+
+$s4 = Service::updateOrCreate(
+    ['provider_id' => $p4->id, 'name' => 'Haircut'],
+    ['duration_minutes' => 30, 'price' => 3000]
+);
+
+$s5 = Service::updateOrCreate(
+    ['provider_id' => $p5->id, 'name' => 'Manicure'],
+    ['duration_minutes' => 30, 'price' => 6000]
+);
 
         // GENERATE EVERY WEEKDAY SLOTS AUTOMATICALLY FOR A FULL MONTH
-        $begin = new DateTime('2026-10-01');
-        $end = new DateTime('2026-11-01');
-        $interval = new DateInterval('P1D');
-        $period = new DatePeriod($begin, $interval, $end);
+$begin = new DateTime('2026-11-01');
+$end = new DateTime('2027-02-01');
+$interval = new DateInterval('P1D');
+$period = new DatePeriod($begin, $interval, $end);
 
-        $times = ['09:30:00', '11:00:00', '13:30:00', '15:00:00', '16:30:00'];
-        $providers = [$p1, $p2, $p3, $p4, $p5];
-        $clients = [$client1, $client2];
-        $statuses = ['booked', 'cancelled', 'no_show'];
+$times = ['09:30:00', '11:00:00', '13:30:00', '15:00:00', '16:30:00'];
+$providers = [$p1, $p2, $p3, $p4, $p5];
+$clients = [$client1, $client2];
 
-        foreach ($period as $dt) {
-            // FIXED: Explicitly matches ISO numbers 1 to 5 representing Monday through Friday
-            if (in_array((int)$dt->format('N'), [1, 2, 3, 4, 5])) {
-                $dateStr = $dt->format('Y-m-d');
-                
-                foreach ($times as $time) {
-                    foreach ($providers as $prov) {
-                        $slot = TimeSlot::create([
-                            'provider_id' => $prov->id,
-                            'start_time' => "{$dateStr} {$time}",
-                            'end_time' => date('Y-m-d H:i:s', strtotime("{$dateStr} {$time} +30 minutes")),
-                            'status' => 'available',
-                        ]);
+foreach ($period as $dt) {
+    if (in_array((int) $dt->format('N'), [1, 2, 3, 4, 5])) {
+        $dateStr = $dt->format('Y-m-d');
 
-                        // Automatically hooks and claims random appointment rows to feed the dashboard data tables
-                        if (rand(1, 10) === 1) {
-                            $slot->update(['status' => 'booked']);
-                            $randomClient = $clients[array_rand($clients)];
-                            $srv = Service::where('provider_id', $prov->id)->first();
+        foreach ($times as $time) {
+            foreach ($providers as $prov) {
+                $startTime = "{$dateStr} {$time}";
+                $endTime = date(
+                    'Y-m-d H:i:s',
+                    strtotime("{$startTime} +30 minutes")
+                );
 
-                            Appointment::create([
-                                'client_id' => $randomClient->id,
-                                'time_slot_id' => $slot->id,
-                                'service_id' => $srv->id,
-                                'status' => $statuses[array_rand($statuses)],
-                                'notes' => 'Client requested a standard consultation block.',
-                                'consultation_report' => null
-                            ]);
-                        }
-                    }
-                }
+                $slot = TimeSlot::firstOrCreate(
+                    [
+                        'provider_id' => $prov->id,
+                        'start_time' => $startTime,
+                    ],
+                    [
+                        'end_time' => $endTime,
+                        'status' => 'available',
+                    ]
+                );
             }
         }
     }
+}
+}
 }

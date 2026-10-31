@@ -9,9 +9,6 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    /**
-     * Secure registration endpoint. Overrides and drops client-side role/status variables.
-     */
     public function register(Request $request)
     {
         $validated = $request->validate([
@@ -24,18 +21,29 @@ class AuthController extends Controller
             'business_type' => 'required|in:clinic,salon,none',
         ]);
 
-        $validated['password'] = Hash::make($validated['password']);
-        
-        // SERVER SIDE ENFORCEMENT: Ignore client input overrides completely
-        if ($validated['business_type'] === 'none') {
-            $validated['role'] = 'client';
-            $validated['status'] = 'approved';
-        } else {
-            $validated['role'] = 'staff';
-            $validated['status'] = 'pending_review'; // Force business accounts into staging state
+        // role and status are decided here on the server, never taken from the request
+        $isBusiness = $validated['business_type'] !== 'none';
+
+        $user = User::forceCreate([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => Hash::make($validated['password']),
+            'phone_number' => $validated['phone_number'] ?? null,
+            'address' => $validated['address'] ?? null,
+            'age' => $isBusiness ? null : ($validated['age'] ?? null),
+            'business_type' => $validated['business_type'],
+            'role' => $isBusiness ? 'staff' : 'client',
+            'status' => $isBusiness ? 'pending_review' : 'approved',
+        ]);
+
+        // Pending businesses get NO token until they are approved
+        if ($isBusiness) {
+            return response()->json([
+                'message' => 'Application received. Your business is pending review.',
+                'user' => $user->only('id', 'name', 'email', 'role', 'business_type', 'status'),
+            ], 201);
         }
 
-        $user = User::create($validated);
         $token = $user->createToken('api-token')->plainTextToken;
 
         return response()->json([
@@ -59,11 +67,12 @@ class AuthController extends Controller
             ]);
         }
 
-        // SECURITY CHECK: If a business profile is pending review, deny access to dashboards
-        if ($user->role === 'staff' && $user->status === 'pending_review') {
-            throw ValidationException::withMessages([
-                'email' => ['Your business application is currently under review and pending approval.'],
-            ]);
+        if ($user->role === 'staff' && $user->status !== 'approved') {
+            $message = $user->status === 'rejected'
+                ? 'Your business application was not approved.'
+                : 'Your business application is currently under review and pending approval.';
+
+            throw ValidationException::withMessages(['email' => [$message]]);
         }
 
         $token = $user->createToken('api-token')->plainTextToken;
@@ -77,6 +86,7 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
+
         return response()->json(['message' => 'Logged out']);
     }
 }
