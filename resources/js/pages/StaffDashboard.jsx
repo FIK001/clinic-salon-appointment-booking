@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 
 export default function StaffDashboard() {
@@ -15,6 +14,18 @@ export default function StaffDashboard() {
     const [isEditingProfile, setIsEditingProfile] = useState(false);
     const [savingReportId, setSavingReportId] = useState(null);
     const [completingId, setCompletingId] = useState(null);
+
+    // Schedule management state
+    const [schedule, setSchedule] = useState({
+        working_days: [],
+        start_time: '09:00',
+        end_time: '17:00',
+        break_start: '',
+        break_end: ''
+    });
+
+    const [scheduleLoading, setScheduleLoading] = useState(true);
+    const [savingSchedule, setSavingSchedule] = useState(false);
 
     // Fetch appointments from the database.
     const fetchAllAppointments = useCallback(async () => {
@@ -66,9 +77,52 @@ export default function StaffDashboard() {
         }
     }, []);
 
+    // Fetch the authenticated staff member's own schedule.
+    const fetchSchedule = useCallback(async () => {
+        try {
+            const token = localStorage.getItem('token');
+
+            const response = await fetch('/api/staff/schedule', {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+
+                throw new Error(
+                    data.message || 'Unable to load your working schedule.'
+                );
+            }
+
+            const data = await response.json();
+            const saved = data.schedule;
+
+            if (saved) {
+                setSchedule({
+                    working_days: saved.working_days || [],
+                    start_time: saved.start_time?.slice(0, 5) || '09:00',
+                    end_time: saved.end_time?.slice(0, 5) || '17:00',
+                    break_start: saved.break_start?.slice(0, 5) || '',
+                    break_end: saved.break_end?.slice(0, 5) || ''
+                });
+            }
+        } catch (error) {
+            setMessage({
+                type: 'error',
+                text: error.message
+            });
+        } finally {
+            setScheduleLoading(false);
+        }
+    }, []);
+
     useEffect(() => {
         fetchAllAppointments();
-    }, [fetchAllAppointments]);
+        fetchSchedule();
+    }, [fetchAllAppointments, fetchSchedule]);
 
     // Mark an attended appointment as completed.
     const handleMarkCompleted = async (id) => {
@@ -166,6 +220,67 @@ export default function StaffDashboard() {
             });
         } finally {
             setSavingReportId(null);
+        }
+    };
+
+    // Select or deselect working days.
+    const toggleWorkingDay = (day) => {
+        setSchedule((current) => ({
+            ...current,
+            working_days: current.working_days.includes(day)
+                ? current.working_days.filter((item) => item !== day)
+                : [...current.working_days, day]
+        }));
+    };
+
+    // Save schedule to the database.
+    const handleSaveSchedule = async (event) => {
+        event.preventDefault();
+
+        setSavingSchedule(true);
+        setMessage({ type: '', text: '' });
+
+        try {
+            const token = localStorage.getItem('token');
+
+            const response = await fetch('/api/staff/schedule', {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json'
+                },
+                body: JSON.stringify(schedule)
+            });
+
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                const validationErrors = data.errors
+                    ? Object.values(data.errors).flat().join(' ')
+                    : '';
+
+                throw new Error(
+                    validationErrors ||
+                    data.message ||
+                    'Unable to save schedule.'
+                );
+            }
+
+            setMessage({
+                type: 'success',
+                text: data.message ||
+                    'Your working schedule has been saved successfully.'
+            });
+
+            await fetchSchedule();
+        } catch (error) {
+            setMessage({
+                type: 'error',
+                text: error.message
+            });
+        } finally {
+            setSavingSchedule(false);
         }
     };
 
@@ -312,6 +427,182 @@ export default function StaffDashboard() {
                 )}
             </section>
 
+            {/* Schedule Management */}
+            <section className="bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
+                <div className="border-b border-slate-100 pb-4 mb-5">
+                    <h2 className="text-base font-bold text-slate-800">
+                        Schedule Management
+                    </h2>
+
+                    <p className="text-xs text-slate-400 mt-1">
+                        Manage your working days, office hours and break periods.
+                    </p>
+                </div>
+
+                {scheduleLoading ? (
+                    <p className="text-sm text-slate-400">
+                        Loading your schedule...
+                    </p>
+                ) : (
+                    <form
+                        onSubmit={handleSaveSchedule}
+                        className="space-y-6"
+                    >
+                        {/* Working Days */}
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-3">
+                                Working Days
+                            </label>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                {[
+                                    'Monday',
+                                    'Tuesday',
+                                    'Wednesday',
+                                    'Thursday',
+                                    'Friday',
+                                    'Saturday',
+                                    'Sunday'
+                                ].map((day) => (
+                                    <label
+                                        key={day}
+                                        className="flex items-center gap-2 p-3 border border-slate-200 rounded-lg text-sm cursor-pointer hover:bg-slate-50"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={schedule.working_days.includes(day)}
+                                            onChange={() => toggleWorkingDay(day)}
+                                            className="w-4 h-4 accent-blue-600"
+                                        />
+
+                                        {day}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Working Hours */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                            <div>
+                                <label
+                                    className="block text-xs font-bold text-slate-500 mb-2"
+                                    htmlFor="schedule-start"
+                                >
+                                    Opening Time
+                                </label>
+
+                                <input
+                                    id="schedule-start"
+                                    type="time"
+                                    required
+                                    value={schedule.start_time}
+                                    onChange={(event) =>
+                                        setSchedule((current) => ({
+                                            ...current,
+                                            start_time: event.target.value
+                                        }))
+                                    }
+                                    className="w-full px-3 py-3 border border-slate-200 rounded-xl text-sm"
+                                />
+                            </div>
+
+                            <div>
+                                <label
+                                    className="block text-xs font-bold text-slate-500 mb-2"
+                                    htmlFor="schedule-end"
+                                >
+                                    Closing Time
+                                </label>
+
+                                <input
+                                    id="schedule-end"
+                                    type="time"
+                                    required
+                                    value={schedule.end_time}
+                                    onChange={(event) =>
+                                        setSchedule((current) => ({
+                                            ...current,
+                                            end_time: event.target.value
+                                        }))
+                                    }
+                                    className="w-full px-3 py-3 border border-slate-200 rounded-xl text-sm"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Break Period */}
+                        <div className="border-t border-slate-100 pt-5">
+                            <h3 className="text-sm font-bold text-slate-700 mb-1">
+                                Break Period
+                            </h3>
+
+                            <p className="text-xs text-slate-400 mb-4">
+                                Leave both fields empty if you do not take a scheduled break.
+                            </p>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                <div>
+                                    <label
+                                        className="block text-xs font-bold text-slate-500 mb-2"
+                                        htmlFor="break-start"
+                                    >
+                                        Break Starts
+                                    </label>
+
+                                    <input
+                                        id="break-start"
+                                        type="time"
+                                        value={schedule.break_start}
+                                        onChange={(event) =>
+                                            setSchedule((current) => ({
+                                                ...current,
+                                                break_start: event.target.value
+                                            }))
+                                        }
+                                        className="w-full px-3 py-3 border border-slate-200 rounded-xl text-sm"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label
+                                        className="block text-xs font-bold text-slate-500 mb-2"
+                                        htmlFor="break-end"
+                                    >
+                                        Break Ends
+                                    </label>
+
+                                    <input
+                                        id="break-end"
+                                        type="time"
+                                        value={schedule.break_end}
+                                        onChange={(event) =>
+                                            setSchedule((current) => ({
+                                                ...current,
+                                                break_end: event.target.value
+                                            }))
+                                        }
+                                        className="w-full px-3 py-3 border border-slate-200 rounded-xl text-sm"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Save Schedule */}
+                        <div className="flex justify-end border-t border-slate-100 pt-5">
+                            <button
+                                type="submit"
+                                disabled={savingSchedule || scheduleLoading}
+                                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition"
+                            >
+                                {savingSchedule
+                                    ? 'Saving Schedule...'
+                                    : 'Save Schedule'}
+                            </button>
+                        </div>
+                    </form>
+                )}
+            </section>
+
             {/* Feedback Messages */}
             {message.text && (
                 <div
@@ -365,18 +656,23 @@ export default function StaffDashboard() {
                                     <th className="px-4 py-3 text-xs font-bold text-slate-600">
                                         ID
                                     </th>
+
                                     <th className="px-4 py-3 text-xs font-bold text-slate-600">
                                         Patient
                                     </th>
+
                                     <th className="px-4 py-3 text-xs font-bold text-slate-600">
                                         Date & Time
                                     </th>
+
                                     <th className="px-4 py-3 text-xs font-bold text-slate-600">
                                         Practitioner
                                     </th>
+
                                     <th className="px-4 py-3 text-xs font-bold text-slate-600">
                                         Status
                                     </th>
+
                                     <th className="px-4 py-3 text-xs font-bold text-slate-600">
                                         Actions
                                     </th>
