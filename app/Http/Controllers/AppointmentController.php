@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\AppointmentBooked;
 use App\Models\Appointment;
 use App\Models\Service;
 use App\Models\TimeSlot;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 class AppointmentController extends Controller
@@ -107,7 +110,7 @@ class AppointmentController extends Controller
     }
 
     /**
-     * Book an available appointment slot.
+     * Book an available appointment slot and queue confirmation email.
      */
     public function store(Request $request)
     {
@@ -117,7 +120,8 @@ class AppointmentController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        return DB::transaction(function () use ($validated) {
+        // Save the appointment and reserve the selected slot.
+        $appointment = DB::transaction(function () use ($validated) {
             $slot = TimeSlot::lockForUpdate()
                 ->findOrFail($validated['time_slot_id']);
 
@@ -155,15 +159,38 @@ class AppointmentController extends Controller
                 'status' => 'booked',
             ]);
 
-            return response()->json(
-                $appointment->fresh()->load([
-                    'client',
-                    'service',
-                    'time_slot.provider',
-                ]),
-                201
-            );
+            return $appointment;
         });
+
+        // Load the relationships needed by the confirmation email.
+        $appointment->load([
+            'client',
+            'service',
+            'time_slot.provider',
+        ]);
+
+        // Queue the email so the booking request does not wait for Mailtrap.
+        try {
+            if ($appointment->client && $appointment->client->email) {
+                Mail::to($appointment->client->email)
+                    ->queue(new AppointmentBooked($appointment));
+
+                Log::info(
+                    "Booking confirmation email queued for appointment #{$appointment->id}."
+                );
+            } else {
+                Log::warning(
+                    "Booking confirmation email skipped: no client email for appointment #{$appointment->id}."
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::error(
+                "Booking confirmation email could not be queued for appointment #{$appointment->id}: "
+                . $e->getMessage()
+            );
+        }
+
+        return response()->json($appointment, 201);
     }
 
     /**
