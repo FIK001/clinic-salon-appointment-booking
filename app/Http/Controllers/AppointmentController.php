@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Mail\AppointmentBooked;
+use App\Mail\AppointmentCancelled;
+use App\Mail\AppointmentRescheduled;
 use App\Models\Appointment;
 use App\Models\Service;
 use App\Models\TimeSlot;
@@ -194,7 +196,7 @@ class AppointmentController extends Controller
     }
 
     /**
-     * Cancel an appointment.
+     * Cancel an appointment and queue a cancellation confirmation email.
      */
     public function cancel(Appointment $appointment)
     {
@@ -207,7 +209,8 @@ class AppointmentController extends Controller
             ]);
         }
 
-        return DB::transaction(function () use ($appointment) {
+        // Update the appointment and release its time slot.
+        $appointment = DB::transaction(function () use ($appointment) {
             $appointment->update([
                 'status' => 'cancelled',
             ]);
@@ -216,17 +219,39 @@ class AppointmentController extends Controller
                 'status' => 'available',
             ]);
 
-            return response()->json(
-                $appointment->fresh()->load([
-                    'service',
-                    'time_slot.provider',
-                ])
-            );
+            return $appointment->fresh()->load([
+                'client',
+                'service',
+                'time_slot.provider',
+            ]);
         });
+
+        // Queue the cancellation email after the transaction succeeds.
+        try {
+            if ($appointment->client && $appointment->client->email) {
+                Mail::to($appointment->client->email)
+                    ->queue(new AppointmentCancelled($appointment));
+
+                Log::info(
+                    "Cancellation email queued for appointment #{$appointment->id}."
+                );
+            } else {
+                Log::warning(
+                    "Cancellation email skipped: no client email for appointment #{$appointment->id}."
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::error(
+                "Cancellation email could not be queued for appointment #{$appointment->id}: "
+                . $e->getMessage()
+            );
+        }
+
+        return response()->json($appointment);
     }
 
     /**
-     * Reschedule an appointment to another available slot.
+     * Reschedule an appointment and queue a confirmation email.
      */
     public function reschedule(Request $request, Appointment $appointment)
     {
@@ -237,7 +262,17 @@ class AppointmentController extends Controller
             'time_slot_id' => 'required|exists:time_slots,id',
         ]);
 
-        return DB::transaction(function () use ($validated, $appointment) {
+        // Update the appointment and reserve the new slot.
+        $result = DB::transaction(function () use ($validated, $appointment) {
+
+            // Lock the original slot and capture its original date and time.
+            $oldSlot = TimeSlot::lockForUpdate()
+                ->findOrFail($appointment->time_slot_id);
+
+            $previousDate = $oldSlot->start_time->format('l, d F Y');
+            $previousTime = $oldSlot->start_time->format('h:i A');
+
+            // Lock the requested new slot.
             $newSlot = TimeSlot::lockForUpdate()
                 ->findOrFail($validated['time_slot_id']);
 
@@ -253,9 +288,6 @@ class AppointmentController extends Controller
                 ]);
             }
 
-            $oldSlot = TimeSlot::lockForUpdate()
-                ->findOrFail($appointment->time_slot_id);
-
             if ($newSlot->provider_id !== $oldSlot->provider_id) {
                 throw ValidationException::withMessages([
                     'time_slot_id' => [
@@ -264,25 +296,62 @@ class AppointmentController extends Controller
                 ]);
             }
 
+            // Release the original slot.
             $oldSlot->update([
                 'status' => 'available',
             ]);
 
+            // Update the appointment to the new slot.
             $appointment->update([
                 'time_slot_id' => $newSlot->id,
             ]);
 
+            // Reserve the new slot.
             $newSlot->update([
                 'status' => 'booked',
             ]);
 
-            return response()->json(
-                $appointment->fresh()->load([
-                    'service',
-                    'time_slot.provider',
-                ])
-            );
+            $updatedAppointment = $appointment->fresh()->load([
+                'client',
+                'service',
+                'time_slot.provider',
+            ]);
+
+            return [
+                'appointment' => $updatedAppointment,
+                'previous_date' => $previousDate,
+                'previous_time' => $previousTime,
+            ];
         });
+
+        $appointment = $result['appointment'];
+
+        // Queue the rescheduling email after the transaction succeeds.
+        try {
+            if ($appointment->client && $appointment->client->email) {
+                Mail::to($appointment->client->email)
+                    ->queue(new AppointmentRescheduled(
+                        $appointment,
+                        $result['previous_date'],
+                        $result['previous_time']
+                    ));
+
+                Log::info(
+                    "Rescheduling email queued for appointment #{$appointment->id}."
+                );
+            } else {
+                Log::warning(
+                    "Rescheduling email skipped: no client email for appointment #{$appointment->id}."
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::error(
+                "Rescheduling email could not be queued for appointment #{$appointment->id}: "
+                . $e->getMessage()
+            );
+        }
+
+        return response()->json($appointment);
     }
 
     /**
