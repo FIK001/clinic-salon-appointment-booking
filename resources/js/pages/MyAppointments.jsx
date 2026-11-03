@@ -109,7 +109,7 @@ export default function MyAppointments() {
         setMessage({ type: '', text: '' });
     };
 
-    // Load available slots for the original practitioner
+    // Load available slots for the original practitioner and service
     const fetchAvailableSlots = useCallback(async () => {
         if (!selectedAppointment || !rescheduleDate) {
             setAvailableSlots([]);
@@ -120,10 +120,14 @@ export default function MyAppointments() {
             selectedAppointment.time_slot?.provider_id ??
             selectedAppointment.time_slot?.provider?.id;
 
-        if (!providerId) {
+        const serviceId =
+            selectedAppointment.service_id ??
+            selectedAppointment.service?.id;
+
+        if (!providerId || !serviceId) {
             setMessage({
                 type: 'error',
-                text: 'Unable to identify the original practitioner.',
+                text: 'Unable to identify the original practitioner or service.',
             });
             return;
         }
@@ -137,6 +141,7 @@ export default function MyAppointments() {
 
             const params = new URLSearchParams({
                 provider_id: String(providerId),
+                service_id: String(serviceId),
                 date: rescheduleDate,
             });
 

@@ -1,5 +1,13 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
+
+const getLocalDateString = () => {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+};
 
 export default function Dashboard() {
     const [sector, setSector] = useState('clinic');
@@ -7,13 +15,20 @@ export default function Dashboard() {
     const [providers, setProviders] = useState([]);
     const [selectedProviderId, setSelectedProviderId] = useState('');
     const [selectedProvider, setSelectedProvider] = useState(null);
-    const [selectedDate, setSelectedDate] = useState('2026-10-21');
+
+    // Service selection states
+    const [services, setServices] = useState([]);
+    const [selectedServiceId, setSelectedServiceId] = useState('');
+    const [servicesLoading, setServicesLoading] = useState(false);
+
+    const [selectedDate, setSelectedDate] = useState(() => getLocalDateString());
 
     const [slotsData, setSlotsData] = useState({
         status: '',
         slots: [],
         message: ''
     });
+
     const [searchId, setSearchSearchId] = useState('');
     const [searchedAppointment, setSearchAppointment] = useState(null);
     const [allAppointments, setAllAppointments] = useState([]);
@@ -40,12 +55,14 @@ export default function Dashboard() {
 
     const getToken = () => localStorage.getItem('token');
 
+    // Fetch providers based on selected specialty.
     const fetchProviders = useCallback(async (targetRole) => {
         setProvidersLoading(true);
         setMessage({ type: '', text: '' });
 
         try {
             const token = getToken();
+
             const params = new URLSearchParams({
                 specialty: targetRole
             });
@@ -65,6 +82,7 @@ export default function Dashboard() {
             }
 
             const data = await response.json();
+
             const providerArray = Array.isArray(data)
                 ? data
                 : Array.isArray(data.data)
@@ -94,8 +112,10 @@ export default function Dashboard() {
             }
         } catch (error) {
             console.error('Error fetching specialists:', error);
+
             setProviders([]);
             setSelectedProviderId('');
+
             setMessage({
                 type: 'error',
                 text: error.message || 'Failed to load specialists.'
@@ -105,9 +125,74 @@ export default function Dashboard() {
         }
     }, []);
 
+    // Fetch services belonging to the selected provider.
+    const fetchProviderServices = useCallback(async () => {
+        if (!selectedProviderId) {
+            setServices([]);
+            setSelectedServiceId('');
+            return;
+        }
+
+        setServicesLoading(true);
+        setServices([]);
+        setSelectedServiceId('');
+
+        try {
+            const token = getToken();
+
+            const response = await fetch(
+                `/api/marketplace/providers/${selectedProviderId}/services`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        Accept: 'application/json'
+                    }
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error('Unable to load provider services.');
+            }
+
+            const data = await response.json();
+
+            const providerServices = Array.isArray(data.services)
+                ? data.services
+                : [];
+
+            setServices(providerServices);
+
+            if (providerServices.length > 0) {
+                setSelectedServiceId(String(providerServices[0].id));
+            }
+        } catch (error) {
+            console.error('Error fetching provider services:', error);
+
+            setServices([]);
+            setSelectedServiceId('');
+
+            setMessage({
+                type: 'error',
+                text: error.message || 'Failed to load provider services.'
+            });
+        } finally {
+            setServicesLoading(false);
+        }
+    }, [selectedProviderId]);
+
+    // Fetch available appointment slots for the selected provider and service.
     const fetchSpecialistSlots = useCallback(async () => {
-        if (!selectedProviderId || !selectedDate) {
-            setSlotsData({ status: '', slots: [], message: '' });
+        if (
+            !selectedProviderId ||
+            !selectedServiceId ||
+            !selectedDate ||
+            servicesLoading
+        ) {
+            setSlotsData({
+                status: '',
+                slots: [],
+                message: ''
+            });
             return;
         }
 
@@ -115,8 +200,10 @@ export default function Dashboard() {
 
         try {
             const token = getToken();
+
             const params = new URLSearchParams({
                 provider_id: selectedProviderId,
+                service_id: selectedServiceId,
                 date: selectedDate
             });
 
@@ -130,11 +217,13 @@ export default function Dashboard() {
                 }
             );
 
-            if (!response.ok) {
-                throw new Error('Unable to load available appointment slots.');
-            }
-
             const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.message || 'Unable to load available appointment slots.'
+                );
+            }
 
             setSlotsData({
                 ...data,
@@ -142,6 +231,7 @@ export default function Dashboard() {
             });
         } catch (error) {
             console.error('Error loading appointment slots:', error);
+
             setSlotsData({
                 status: 'error',
                 slots: [],
@@ -150,8 +240,14 @@ export default function Dashboard() {
         } finally {
             setLoading(false);
         }
-    }, [selectedProviderId, selectedDate]);
+    }, [
+        selectedProviderId,
+        selectedServiceId,
+        selectedDate,
+        servicesLoading
+    ]);
 
+    // Fetch appointment history.
     const fetchAppointmentsHistory = useCallback(async () => {
         try {
             const token = getToken();
@@ -181,18 +277,35 @@ export default function Dashboard() {
         }
     }, []);
 
+    // Reset selections when sector changes.
     useEffect(() => {
         setRole(rolesMap[sector][0]);
         setProviders([]);
         setSelectedProviderId('');
         setSelectedProvider(null);
-        setSlotsData({ status: '', slots: [], message: '' });
+        setServices([]);
+        setSelectedServiceId('');
+
+        setSlotsData({
+            status: '',
+            slots: [],
+            message: ''
+        });
     }, [sector]);
 
+    // Load providers when specialty changes.
     useEffect(() => {
-        if (role) fetchProviders(role);
+        if (role) {
+            fetchProviders(role);
+        }
     }, [role, fetchProviders]);
 
+    // Load services when provider changes.
+    useEffect(() => {
+        fetchProviderServices();
+    }, [fetchProviderServices]);
+
+    // Update selected provider and load appointment slots.
     useEffect(() => {
         const selected = providers.find(
             (provider) => String(provider.id) === String(selectedProviderId)
@@ -203,19 +316,26 @@ export default function Dashboard() {
         if (selectedProviderId) {
             fetchSpecialistSlots();
         } else {
-            setSlotsData({ status: '', slots: [], message: '' });
+            setSlotsData({
+                status: '',
+                slots: [],
+                message: ''
+            });
         }
     }, [
         selectedProviderId,
+        selectedServiceId,
         selectedDate,
         providers,
         fetchSpecialistSlots
     ]);
 
+    // Load appointment history on page opening.
     useEffect(() => {
         fetchAppointmentsHistory();
     }, [fetchAppointmentsHistory]);
 
+    // Search appointment by ID.
     const handleSearchAppointment = (event) => {
         event.preventDefault();
 
@@ -231,8 +351,17 @@ export default function Dashboard() {
         setSearchAppointment(found || 'not_found');
     };
 
+    // Book appointment using the selected service.
     const bookAppointment = async (slotId) => {
         setMessage({ type: '', text: '' });
+
+        if (!selectedServiceId) {
+            setMessage({
+                type: 'error',
+                text: 'Please select a service before booking.'
+            });
+            return;
+        }
 
         try {
             const token = getToken();
@@ -246,7 +375,7 @@ export default function Dashboard() {
                 },
                 body: JSON.stringify({
                     time_slot_id: slotId,
-                    service_id: 1,
+                    service_id: Number(selectedServiceId),
                     notes: bookingNote
                 })
             });
@@ -276,6 +405,7 @@ export default function Dashboard() {
         }
     };
 
+    // Identify the next scheduled appointment.
     const upcomingAppointment = allAppointments
         .filter((appointment) => {
             const startTime = appointment.time_slot?.start_time;
@@ -293,6 +423,7 @@ export default function Dashboard() {
                 new Date(b.time_slot.start_time)
         )[0] || null;
 
+    // Format dates for display.
     const formatDate = (value) => {
         if (!value || Number.isNaN(new Date(value).getTime())) {
             return 'Pending';
@@ -303,6 +434,10 @@ export default function Dashboard() {
 
     const availableSlots = slotsData.slots || [];
 
+    const selectedService = services.find(
+        (service) => String(service.id) === String(selectedServiceId)
+    );
+
     return (
         <div className="max-w-6xl mx-auto space-y-8 font-sans pb-12">
 
@@ -312,17 +447,20 @@ export default function Dashboard() {
                         <span className="text-xs uppercase tracking-wider font-bold opacity-80 block">
                             Next Scheduled Appointment
                         </span>
+
                         <p className="text-base font-bold mt-1">
                             With {upcomingAppointment.time_slot?.provider?.name || 'Your Specialist'} on{' '}
                             {formatDate(upcomingAppointment.time_slot?.start_time)}
                         </p>
                     </div>
+
                     <span className="text-xs font-mono font-bold bg-white/20 border border-white/20 px-3 py-1 rounded-xl">
                         ID: #{upcomingAppointment.id}
                     </span>
                 </div>
             )}
 
+            {/* Appointment search */}
             <div className="bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
                 <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
                     Search Appointment by ID
@@ -356,6 +494,7 @@ export default function Dashboard() {
                     <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-2">
                         <div className="flex justify-between gap-3 font-bold border-b pb-2 text-slate-700">
                             <span>Appointment #{searchedAppointment.id}</span>
+
                             <span className="uppercase text-blue-600">
                                 {searchedAppointment.status}
                             </span>
@@ -376,6 +515,7 @@ export default function Dashboard() {
                                 <strong className="block mb-1">
                                     Consultation Report
                                 </strong>
+
                                 {searchedAppointment.consultation_report}
                             </div>
                         )}
@@ -383,7 +523,10 @@ export default function Dashboard() {
                 )}
             </div>
 
-            <div className="bg-white rounded-2xl shadow-xl border border-slate-100 p-6 grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+            {/* Appointment selection */}
+            <div className="bg-white rounded-2xl shadow-xl border border-slate-100 p-6 grid grid-cols-1 md:grid-cols-5 gap-6 items-end">
+
+                {/* Sector */}
                 <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
                         1. Select Sector
@@ -416,6 +559,7 @@ export default function Dashboard() {
                     </div>
                 </div>
 
+                {/* Specialist */}
                 <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
                         2. Select Specialist
@@ -434,6 +578,7 @@ export default function Dashboard() {
                     </select>
                 </div>
 
+                {/* Provider */}
                 <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
                         3. Select Provider
@@ -459,20 +604,51 @@ export default function Dashboard() {
                     </select>
                 </div>
 
+                {/* Service */}
                 <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-                        4. Appointment Date
+                        4. Select Service
+                    </label>
+
+                    <select
+                        value={selectedServiceId}
+                        onChange={(event) => setSelectedServiceId(event.target.value)}
+                        disabled={servicesLoading || services.length === 0}
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                    >
+                        <option value="">
+                            {servicesLoading
+                                ? 'Loading services...'
+                                : services.length === 0
+                                    ? 'No services available'
+                                    : 'Select a service'}
+                        </option>
+
+                        {services.map((service) => (
+                            <option key={service.id} value={String(service.id)}>
+                                {service.name} — {service.duration_minutes} mins — ₦{Number(service.price).toLocaleString()}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                {/* Date */}
+                <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                        5. Appointment Date
                     </label>
 
                     <input
                         type="date"
                         value={selectedDate}
+                        min={getLocalDateString()}
                         onChange={(event) => setSelectedDate(event.target.value)}
                         className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
                     />
                 </div>
             </div>
 
+            {/* Feedback messages */}
             {message.text && (
                 <div
                     role="alert"
@@ -486,14 +662,27 @@ export default function Dashboard() {
                 </div>
             )}
 
+            {/* Available appointment slots */}
             <div className="bg-white rounded-2xl shadow-xl border border-slate-100 p-6">
                 <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">
                     Available Appointment Slots
                 </h2>
 
                 {selectedProvider && (
-                    <p className="text-sm text-slate-500 mb-4">
+                    <p className="text-sm text-slate-500 mb-2">
                         Provider: {selectedProvider.name || selectedProvider.user?.name || `#${selectedProvider.id}`}
+                    </p>
+                )}
+
+                {selectedService && (
+                    <p className="text-sm text-slate-500 mb-4">
+                        Selected service: {selectedService.name} ({selectedService.duration_minutes} minutes)
+                    </p>
+                )}
+
+                {!servicesLoading && selectedProviderId && services.length === 0 && (
+                    <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                        This provider has no services configured yet.
                     </p>
                 )}
 
@@ -510,6 +699,7 @@ export default function Dashboard() {
                         {availableSlots.map((slot) => {
                             const slotId = slot.id ?? slot.time_slot_id;
                             const slotTime = slot.start_time || slot.starts_at;
+
                             const unavailable =
                                 slot.is_available === false ||
                                 slot.status === 'booked' ||
@@ -532,7 +722,12 @@ export default function Dashboard() {
 
                                     <button
                                         type="button"
-                                        disabled={unavailable || slotId == null}
+                                        disabled={
+                                            unavailable ||
+                                            slotId == null ||
+                                            !selectedServiceId ||
+                                            servicesLoading
+                                        }
                                         onClick={() => bookAppointment(slotId)}
                                         className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg"
                                     >
@@ -544,6 +739,7 @@ export default function Dashboard() {
                     </div>
                 )}
 
+                {/* Booking notes */}
                 <div className="mt-6">
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
                         Booking Notes

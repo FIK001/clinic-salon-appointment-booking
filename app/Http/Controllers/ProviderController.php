@@ -3,15 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Models\Provider;
+use App\Models\Service;
 use App\Models\TimeSlot;
+use App\Services\AppointmentSlotService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Carbon\Carbon;
 
 class ProviderController extends Controller
 {
     /**
-     * Get list of providers matching a specialty role with accurate calculated proximity metrics.
+     * Get list of providers matching a specialty role
+     * with calculated proximity metrics.
      */
     public function getProvidersBySpecialty(Request $request)
     {
@@ -108,47 +110,74 @@ class ProviderController extends Controller
     }
 
     /**
-     * Fetch available future slots for a specialist on a target date.
-     * If none exist, suggest the closest upcoming available slots.
+     * Retrieve services offered by a selected provider.
      */
-    public function getSpecialistSlots(Request $request)
+    public function getProviderServices($id)
     {
-        $request->validate([
-            'provider_id' => 'required|exists:providers,id',
-            'date' => 'required|date_format:Y-m-d',
-        ]);
+        $provider = Provider::findOrFail($id);
 
-        $providerId = $request->query('provider_id');
-        $targetDate = $request->query('date');
-
-        // 1. Check available future slots on the selected date.
-        $slots = TimeSlot::where('provider_id', $providerId)
-            ->whereDate('start_time', $targetDate)
-            ->where('start_time', '>', now())
-            ->where('status', 'available')
-            ->orderBy('start_time', 'asc')
+        $services = Service::where('provider_id', $provider->id)
+            ->select(
+                'id',
+                'provider_id',
+                'name',
+                'description',
+                'duration_minutes',
+                'price'
+            )
+            ->orderBy('name')
             ->get();
 
-        if ($slots->count() > 0) {
+        return response()->json([
+            'provider_id' => $provider->id,
+            'services' => $services,
+        ]);
+    }
+
+    /**
+     * Generate and retrieve available appointment slots
+     * based on provider schedule and selected service.
+     */
+    public function getSpecialistSlots(
+        Request $request,
+        AppointmentSlotService $slotService
+    ) {
+        $validated = $request->validate([
+            'provider_id' => 'required|exists:providers,id',
+            'service_id' => 'required|exists:services,id',
+            'date' => 'required|date_format:Y-m-d|after_or_equal:today',
+        ]);
+
+        $provider = Provider::findOrFail($validated['provider_id']);
+
+        $service = Service::findOrFail($validated['service_id']);
+
+        if ((int) $service->provider_id !== (int) $provider->id) {
+            return response()->json([
+                'message' => 'The selected service does not belong to this provider.',
+            ], 422);
+        }
+
+        $slots = $slotService->generate(
+            $provider,
+            $service,
+            $validated['date']
+        );
+
+        if ($slots->isNotEmpty()) {
             return response()->json([
                 'status' => 'available_on_date',
+                'provider_id' => $provider->id,
+                'service_id' => $service->id,
+                'service_duration' => $service->duration_minutes,
                 'slots' => $slots,
             ]);
         }
 
-        // 2. If none exist, find the five closest future alternatives.
-        $closestSlots = TimeSlot::where('provider_id', $providerId)
-            ->where('start_time', '>=', Carbon::parse($targetDate)->startOfDay())
-            ->where('start_time', '>', now())
-            ->where('status', 'available')
-            ->orderBy('start_time', 'asc')
-            ->take(5)
-            ->get();
-
         return response()->json([
-            'status' => 'suggested_alternatives',
-            'message' => 'No slots open on selected target date. See closest alternative openings below.',
-            'slots' => $closestSlots,
+            'status' => 'no_availability',
+            'message' => 'No suitable appointment slots are available on the selected date.',
+            'slots' => [],
         ]);
     }
 

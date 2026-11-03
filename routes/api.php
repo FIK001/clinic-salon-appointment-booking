@@ -20,6 +20,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // Provider marketplace
     Route::get('/marketplace/specialists', [ProviderController::class, 'getProvidersBySpecialty']);
     Route::get('/marketplace/slots', [ProviderController::class, 'getSpecialistSlots']);
+
+    // Retrieve services offered by a provider
+    Route::get('/marketplace/providers/{id}/services', [ProviderController::class, 'getProviderServices']);
+
+    // Update provider profile
     Route::post('/marketplace/providers/{id}/update', [ProviderController::class, 'updateProfile']);
 
     // Appointment management

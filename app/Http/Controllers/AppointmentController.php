@@ -6,8 +6,11 @@ use App\Mail\AppointmentBooked;
 use App\Mail\AppointmentCancelled;
 use App\Mail\AppointmentRescheduled;
 use App\Models\Appointment;
+use App\Models\Provider;
+use App\Models\ProviderSchedule;
 use App\Models\Service;
 use App\Models\TimeSlot;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -17,35 +20,154 @@ use Illuminate\Validation\ValidationException;
 
 class AppointmentController extends Controller
 {
-    /**
-     * Check whether the authenticated user is an approved staff member.
-     */
     private function isApprovedStaff(): bool
     {
         $user = Auth::user();
 
-        return $user && $user->role === 'staff' && $user->status === 'approved';
+        return $user && $user->role === 'staff'
+            && $user->status === 'approved';
     }
 
-    /**
-     * Ensure clients can only manage their own appointments.
-     */
     private function ensureOwner(Appointment $appointment): void
     {
-        if ($appointment->client_id !== Auth::id()) {
+        if ((int) $appointment->client_id !== (int) Auth::id()) {
             abort(403, 'You can only change your own appointments.');
         }
     }
 
-    /**
-     * Prevent changes to appointments that are no longer active.
-     */
     private function ensureOpen(Appointment $appointment): void
     {
         if (in_array($appointment->status, ['cancelled', 'completed', 'no_show'])) {
             throw ValidationException::withMessages([
                 'status' => ['This appointment can no longer be changed.'],
             ]);
+        }
+    }
+
+    /**
+     * Validate provider schedule, working hours, breaks and existing bookings.
+     */
+    private function validateAppointmentAvailability(
+        TimeSlot $slot,
+        Service $service,
+        Provider $provider,
+        ?int $excludeAppointmentId = null
+    ): void {
+        if ((int) $service->provider_id !== (int) $provider->id) {
+            throw ValidationException::withMessages([
+                'service_id' => ['The selected service does not belong to this provider.'],
+            ]);
+        }
+
+        if ((int) $slot->provider_id !== (int) $provider->id) {
+            throw ValidationException::withMessages([
+                'time_slot_id' => ['The selected slot does not belong to this provider.'],
+            ]);
+        }
+
+        $duration = (int) $service->duration_minutes;
+
+        if ($duration <= 0) {
+            throw ValidationException::withMessages([
+                'service_id' => ['The selected service has an invalid duration.'],
+            ]);
+        }
+
+        $schedule = ProviderSchedule::where('provider_id', $provider->id)->first();
+
+        if (!$schedule || empty($schedule->working_days)) {
+            throw ValidationException::withMessages([
+                'time_slot_id' => ['This provider has no working schedule configured.'],
+            ]);
+        }
+
+        $start = $slot->start_time->copy();
+        $end = $start->copy()->addMinutes($duration);
+
+        if ($start->lte(now())) {
+            throw ValidationException::withMessages([
+                'time_slot_id' => ['You cannot book an appointment in the past.'],
+            ]);
+        }
+
+        $workingDays = array_map(
+            fn ($day) => strtolower(trim($day)),
+            $schedule->working_days
+        );
+
+        if (!in_array(strtolower($start->format('l')), $workingDays, true)) {
+            throw ValidationException::withMessages([
+                'time_slot_id' => ['This provider does not work on the selected day.'],
+            ]);
+        }
+
+        $date = $start->format('Y-m-d');
+
+        $workStart = Carbon::parse($date . ' ' . $schedule->start_time);
+        $workEnd = Carbon::parse($date . ' ' . $schedule->end_time);
+
+        if ($start->lt($workStart) || $end->gt($workEnd)) {
+            throw ValidationException::withMessages([
+                'time_slot_id' => [
+                    'The appointment duration falls outside the provider working hours.',
+                ],
+            ]);
+        }
+
+        if ($schedule->break_start && $schedule->break_end) {
+            $breakStart = Carbon::parse($date . ' ' . $schedule->break_start);
+            $breakEnd = Carbon::parse($date . ' ' . $schedule->break_end);
+
+            if ($start->lt($breakEnd) && $end->gt($breakStart)) {
+                throw ValidationException::withMessages([
+                    'time_slot_id' => [
+                        'This appointment overlaps the provider break period.',
+                    ],
+                ]);
+            }
+        }
+
+        /*
+         * Check existing bookings directly in the database.
+         * Each appointment's end time is calculated using its service duration.
+         */
+        $existingAppointments = DB::table('appointments as a')
+            ->join('time_slots as ts', 'a.time_slot_id', '=', 'ts.id')
+            ->join('services as s', 'a.service_id', '=', 's.id')
+            ->where('a.status', 'booked')
+            ->where('ts.provider_id', $provider->id)
+            ->whereDate('ts.start_time', $date)
+            ->when(
+                $excludeAppointmentId,
+                function ($query) use ($excludeAppointmentId) {
+                    $query->where('a.id', '!=', $excludeAppointmentId);
+                }
+            )
+            ->select([
+                'a.id',
+                'ts.start_time',
+                's.duration_minutes',
+            ])
+            ->get();
+
+        foreach ($existingAppointments as $existing) {
+            $existingStart = Carbon::parse($existing->start_time);
+            $existingDuration = (int) $existing->duration_minutes;
+
+            if ($existingDuration <= 0) {
+                continue;
+            }
+
+            $existingEnd = $existingStart->copy()
+                ->addMinutes($existingDuration);
+
+            if ($start->lt($existingEnd) && $end->gt($existingStart)) {
+                throw ValidationException::withMessages([
+                    'time_slot_id' => [
+                        'This time overlaps another booked appointment. Please select another time.',
+                    ],
+                ]);
+            }
         }
     }
 
@@ -82,7 +204,7 @@ class AppointmentController extends Controller
      */
     public function saveReport(Request $request)
     {
-        if (! $this->isApprovedStaff()) {
+        if (!$this->isApprovedStaff()) {
             return response()->json([
                 'message' => 'Unauthorized operation access blocked.',
             ], 403);
@@ -112,7 +234,7 @@ class AppointmentController extends Controller
     }
 
     /**
-     * Book an available appointment slot and queue confirmation email.
+     * Book an appointment and queue confirmation email.
      */
     public function store(Request $request)
     {
@@ -122,8 +244,14 @@ class AppointmentController extends Controller
             'notes' => 'nullable|string',
         ]);
 
-        // Save the appointment and reserve the selected slot.
         $appointment = DB::transaction(function () use ($validated) {
+            $initialSlot = TimeSlot::findOrFail(
+                $validated['time_slot_id']
+            );
+
+            $provider = Provider::lockForUpdate()
+                ->findOrFail($initialSlot->provider_id);
+
             $slot = TimeSlot::lockForUpdate()
                 ->findOrFail($validated['time_slot_id']);
 
@@ -133,21 +261,15 @@ class AppointmentController extends Controller
                 ]);
             }
 
-            if ($slot->start_time <= now()) {
-                throw ValidationException::withMessages([
-                    'time_slot_id' => ['You cannot book an appointment in the past.'],
-                ]);
-            }
+            $service = Service::findOrFail(
+                $validated['service_id']
+            );
 
-            $service = Service::findOrFail($validated['service_id']);
-
-            if ($service->provider_id !== $slot->provider_id) {
-                throw ValidationException::withMessages([
-                    'service_id' => [
-                        "That service does not belong to this slot's provider.",
-                    ],
-                ]);
-            }
+            $this->validateAppointmentAvailability(
+                $slot,
+                $service,
+                $provider
+            );
 
             $appointment = Appointment::create([
                 'client_id' => Auth::id(),
@@ -164,14 +286,12 @@ class AppointmentController extends Controller
             return $appointment;
         });
 
-        // Load the relationships needed by the confirmation email.
         $appointment->load([
             'client',
             'service',
             'time_slot.provider',
         ]);
 
-        // Queue the email so the booking request does not wait for Mailtrap.
         try {
             if ($appointment->client && $appointment->client->email) {
                 Mail::to($appointment->client->email)
@@ -196,26 +316,41 @@ class AppointmentController extends Controller
     }
 
     /**
-     * Cancel an appointment and queue a cancellation confirmation email.
+     * Cancel an appointment and queue a cancellation email.
      */
     public function cancel(Appointment $appointment)
     {
         $this->ensureOwner($appointment);
         $this->ensureOpen($appointment);
 
-        if ($appointment->time_slot->start_time < now()) {
-            throw ValidationException::withMessages([
-                'status' => ['This appointment can no longer be cancelled.'],
-            ]);
-        }
-
-        // Update the appointment and release its time slot.
         $appointment = DB::transaction(function () use ($appointment) {
+            $initialSlot = TimeSlot::findOrFail(
+                $appointment->time_slot_id
+            );
+
+            $provider = Provider::lockForUpdate()
+                ->findOrFail($initialSlot->provider_id);
+
+            $appointment = Appointment::lockForUpdate()
+                ->findOrFail($appointment->id);
+
+            $this->ensureOwner($appointment);
+            $this->ensureOpen($appointment);
+
+            $slot = TimeSlot::lockForUpdate()
+                ->findOrFail($appointment->time_slot_id);
+
+            if ($slot->start_time->lt(now())) {
+                throw ValidationException::withMessages([
+                    'status' => ['This appointment can no longer be cancelled.'],
+                ]);
+            }
+
             $appointment->update([
                 'status' => 'cancelled',
             ]);
 
-            $appointment->time_slot->update([
+            $slot->update([
                 'status' => 'available',
             ]);
 
@@ -226,7 +361,6 @@ class AppointmentController extends Controller
             ]);
         });
 
-        // Queue the cancellation email after the transaction succeeds.
         try {
             if ($appointment->client && $appointment->client->email) {
                 Mail::to($appointment->client->email)
@@ -262,19 +396,34 @@ class AppointmentController extends Controller
             'time_slot_id' => 'required|exists:time_slots,id',
         ]);
 
-        // Update the appointment and reserve the new slot.
         $result = DB::transaction(function () use ($validated, $appointment) {
+            $initialOldSlot = TimeSlot::findOrFail(
+                $appointment->time_slot_id
+            );
 
-            // Lock the original slot and capture its original date and time.
+            $provider = Provider::lockForUpdate()
+                ->findOrFail($initialOldSlot->provider_id);
+
+            $appointment = Appointment::lockForUpdate()
+                ->findOrFail($appointment->id);
+
+            $this->ensureOwner($appointment);
+            $this->ensureOpen($appointment);
+
             $oldSlot = TimeSlot::lockForUpdate()
                 ->findOrFail($appointment->time_slot_id);
+
+            $newSlot = TimeSlot::lockForUpdate()
+                ->findOrFail($validated['time_slot_id']);
 
             $previousDate = $oldSlot->start_time->format('l, d F Y');
             $previousTime = $oldSlot->start_time->format('h:i A');
 
-            // Lock the requested new slot.
-            $newSlot = TimeSlot::lockForUpdate()
-                ->findOrFail($validated['time_slot_id']);
+            if ((int) $newSlot->id === (int) $oldSlot->id) {
+                throw ValidationException::withMessages([
+                    'time_slot_id' => ['You have already booked this time slot.'],
+                ]);
+            }
 
             if ($newSlot->status !== 'available') {
                 throw ValidationException::withMessages([
@@ -282,13 +431,7 @@ class AppointmentController extends Controller
                 ]);
             }
 
-            if ($newSlot->start_time <= now()) {
-                throw ValidationException::withMessages([
-                    'time_slot_id' => ['You cannot reschedule to a past time slot.'],
-                ]);
-            }
-
-            if ($newSlot->provider_id !== $oldSlot->provider_id) {
+            if ((int) $newSlot->provider_id !== (int) $provider->id) {
                 throw ValidationException::withMessages([
                     'time_slot_id' => [
                         'The new slot must belong to the same provider.',
@@ -296,17 +439,23 @@ class AppointmentController extends Controller
                 ]);
             }
 
-            // Release the original slot.
-            $oldSlot->update([
-                'status' => 'available',
-            ]);
+            $service = Service::findOrFail($appointment->service_id);
 
-            // Update the appointment to the new slot.
+            $this->validateAppointmentAvailability(
+                $newSlot,
+                $service,
+                $provider,
+                $appointment->id
+            );
+
             $appointment->update([
                 'time_slot_id' => $newSlot->id,
             ]);
 
-            // Reserve the new slot.
+            $oldSlot->update([
+                'status' => 'available',
+            ]);
+
             $newSlot->update([
                 'status' => 'booked',
             ]);
@@ -326,7 +475,6 @@ class AppointmentController extends Controller
 
         $appointment = $result['appointment'];
 
-        // Queue the rescheduling email after the transaction succeeds.
         try {
             if ($appointment->client && $appointment->client->email) {
                 Mail::to($appointment->client->email)
@@ -359,7 +507,7 @@ class AppointmentController extends Controller
      */
     public function markNoShow(Appointment $appointment)
     {
-        if (! $this->isApprovedStaff()) {
+        if (!$this->isApprovedStaff()) {
             return response()->json([
                 'message' => 'Unauthorized operation access blocked.',
             ], 403);
@@ -389,7 +537,7 @@ class AppointmentController extends Controller
      */
     public function markCompleted(Appointment $appointment)
     {
-        if (! $this->isApprovedStaff()) {
+        if (!$this->isApprovedStaff()) {
             return response()->json([
                 'message' => 'Unauthorized operation access blocked.',
             ], 403);
