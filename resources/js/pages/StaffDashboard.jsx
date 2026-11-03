@@ -15,7 +15,6 @@ export default function StaffDashboard() {
     const [savingReportId, setSavingReportId] = useState(null);
     const [completingId, setCompletingId] = useState(null);
 
-    // Schedule management state
     const [schedule, setSchedule] = useState({
         working_days: [],
         start_time: '09:00',
@@ -27,7 +26,6 @@ export default function StaffDashboard() {
     const [scheduleLoading, setScheduleLoading] = useState(true);
     const [savingSchedule, setSavingSchedule] = useState(false);
 
-    // Fetch appointments from the database.
     const fetchAllAppointments = useCallback(async () => {
         try {
             const token = localStorage.getItem('token');
@@ -77,7 +75,6 @@ export default function StaffDashboard() {
         }
     }, []);
 
-    // Fetch the authenticated staff member's own schedule.
     const fetchSchedule = useCallback(async () => {
         try {
             const token = localStorage.getItem('token');
@@ -124,7 +121,6 @@ export default function StaffDashboard() {
         fetchSchedule();
     }, [fetchAllAppointments, fetchSchedule]);
 
-    // Mark an attended appointment as completed.
     const handleMarkCompleted = async (id) => {
         setMessage({ type: '', text: '' });
         setCompletingId(id);
@@ -167,7 +163,6 @@ export default function StaffDashboard() {
         }
     };
 
-    // Handle consultation report input.
     const handleReportInputChange = (apptId, value) => {
         setReportsData((previousReports) => ({
             ...previousReports,
@@ -175,7 +170,6 @@ export default function StaffDashboard() {
         }));
     };
 
-    // Save consultation report to the database.
     const handleSaveReport = async (apptId) => {
         setMessage({ type: '', text: '' });
         setSavingReportId(apptId);
@@ -223,7 +217,6 @@ export default function StaffDashboard() {
         }
     };
 
-    // Select or deselect working days.
     const toggleWorkingDay = (day) => {
         setSchedule((current) => ({
             ...current,
@@ -233,7 +226,6 @@ export default function StaffDashboard() {
         }));
     };
 
-    // Save schedule to the database.
     const handleSaveSchedule = async (event) => {
         event.preventDefault();
 
@@ -284,7 +276,6 @@ export default function StaffDashboard() {
         }
     };
 
-    // Update practitioner profile display.
     const saveProfileChanges = (event) => {
         event.preventDefault();
 
@@ -296,7 +287,6 @@ export default function StaffDashboard() {
         });
     };
 
-    // Format appointment date and time.
     const formatDate = (dateValue) => {
         if (!dateValue) return 'Pending';
 
@@ -307,7 +297,6 @@ export default function StaffDashboard() {
         return date.toLocaleString();
     };
 
-    // Get patient name.
     const getPatientName = (appt) => {
         return (
             appt.client?.name ||
@@ -316,7 +305,6 @@ export default function StaffDashboard() {
         );
     };
 
-    // Appointment status styling.
     const getStatusClasses = (status) => {
         if (status === 'no_show') {
             return 'bg-rose-50 border-rose-200 text-rose-600';
@@ -359,10 +347,7 @@ export default function StaffDashboard() {
                 </div>
 
                 {isEditingProfile ? (
-                    <form
-                        onSubmit={saveProfileChanges}
-                        className="space-y-4"
-                    >
+                    <form onSubmit={saveProfileChanges} className="space-y-4">
                         <div>
                             <label
                                 htmlFor="profile-phone"
@@ -444,10 +429,8 @@ export default function StaffDashboard() {
                         Loading your schedule...
                     </p>
                 ) : (
-                    <form
-                        onSubmit={handleSaveSchedule}
-                        className="space-y-6"
-                    >
+                    <form onSubmit={handleSaveSchedule} className="space-y-6">
+
                         {/* Working Days */}
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-3">
@@ -752,6 +735,8 @@ export default function StaffDashboard() {
                                                 <tr>
                                                     <td colSpan="6" className="px-5 py-5 bg-slate-50">
                                                         <div className="space-y-5">
+
+                                                            {/* Appointment Details */}
                                                             <div>
                                                                 <h3 className="text-sm font-bold text-slate-700 mb-2">
                                                                     Appointment Details
@@ -762,40 +747,7 @@ export default function StaffDashboard() {
                                                                 </p>
                                                             </div>
 
-                                                            <div>
-                                                                <h3 className="text-sm font-bold text-slate-700 mb-3">
-                                                                    Patient Appointment History
-                                                                </h3>
-
-                                                                <div className="space-y-3">
-                                                                    {clientHistory.map((historyItem) => (
-                                                                        <div
-                                                                            key={historyItem.id}
-                                                                            className="bg-white border border-slate-200 rounded-lg p-3"
-                                                                        >
-                                                                            <p className="text-sm font-semibold text-slate-700">
-                                                                                Appointment #{historyItem.id}
-                                                                            </p>
-
-                                                                            <p className="text-xs text-slate-500 mt-1">
-                                                                                {formatDate(historyItem.time_slot?.start_time)}
-                                                                            </p>
-
-                                                                            <p className="text-xs text-slate-500 mt-1">
-                                                                                Status: {historyItem.status || 'Unknown'}
-                                                                            </p>
-
-                                                                            {historyItem.consultation_report && (
-                                                                                <p className="text-sm text-slate-600 mt-2 whitespace-pre-wrap">
-                                                                                    Report: {historyItem.consultation_report}
-                                                                                </p>
-                                                                            )}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Consultation Report */}
+                                                            {/* Consultation Report - moved above Patient Appointment History */}
                                                             <div className="border-t border-slate-200 pt-4 space-y-3">
                                                                 <label
                                                                     htmlFor={`report-${appt.id}`}
@@ -831,6 +783,41 @@ export default function StaffDashboard() {
                                                                     </button>
                                                                 </div>
                                                             </div>
+
+                                                            {/* Patient Appointment History */}
+                                                            <div>
+                                                                <h3 className="text-sm font-bold text-slate-700 mb-3">
+                                                                    Patient Appointment History
+                                                                </h3>
+
+                                                                <div className="space-y-3">
+                                                                    {clientHistory.map((historyItem) => (
+                                                                        <div
+                                                                            key={historyItem.id}
+                                                                            className="bg-white border border-slate-200 rounded-lg p-3"
+                                                                        >
+                                                                            <p className="text-sm font-semibold text-slate-700">
+                                                                                Appointment #{historyItem.id}
+                                                                            </p>
+
+                                                                            <p className="text-xs text-slate-500 mt-1">
+                                                                                {formatDate(historyItem.time_slot?.start_time)}
+                                                                            </p>
+
+                                                                            <p className="text-xs text-slate-500 mt-1">
+                                                                                Status: {historyItem.status || 'Unknown'}
+                                                                            </p>
+
+                                                                            {historyItem.consultation_report && (
+                                                                                <p className="text-sm text-slate-600 mt-2 whitespace-pre-wrap">
+                                                                                    Report: {historyItem.consultation_report}
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+
                                                         </div>
                                                     </td>
                                                 </tr>
